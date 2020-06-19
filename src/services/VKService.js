@@ -1,21 +1,21 @@
 import bridge from "@vkontakte/vk-bridge";
+import useThrottleCallback from '@react-hook/throttle';
 
 const API_VERSION = "5.110";
 const FRIENDS_GET_REQEST_ID = "friends.get";
 const GROUPS_GET_REQEST_ID = "groups.get";
-const GROUPS_GET_BY_ID_REQUEST_ID = "groups.getById";
+// const GROUPS_GET_BY_ID_REQUEST_ID = "groups.getById";
 
 let token = null;
 
-let callAPIMethod = (method, requestId, paramName, paramValue) => { 
+let callAPIMethod = (method, requestId, params) => { 
     let request = {
         "method": method, 
         "request_id": requestId, 
-        "params": {
-            "v" : API_VERSION, 
-            "access_token" : token
-    }};
-    request.params[paramName] = paramValue;
+        "params": params
+    };
+    params["v"] = API_VERSION;
+    params["access_token"] = token;
     bridge.send("VKWebAppCallAPIMethod", request);
 };
 
@@ -25,7 +25,7 @@ let getGroupsData = (userId = "1") => {
             token = data.access_token;
             // console.log(`token ${token}`);
             bridge.unsubscribe(onTokenReceived);
-            callAPIMethod("friends.get", FRIENDS_GET_REQEST_ID, "userIds", userId);
+            callAPIMethod("friends.get", FRIENDS_GET_REQEST_ID, { "userIds": userId });
         }
     };
     bridge.subscribe(onTokenReceived);
@@ -42,17 +42,17 @@ let getGroupsData = (userId = "1") => {
                     console.log(data);
                     if (!!data.items){
                         // console.log(`No groups for user ${requestedUserId}`);
-                        let ids = [];
-                        data.items.forEach(groupId => {
-                            ids.push(groupId);
-                            if (ids.count === 500){
-                                callAPIMethod("groups.getById", GROUPS_GET_BY_ID_REQUEST_ID, "group_ids", ids.join(','));
-                                ids = [];
-                            }
-                        });
-                        if (ids.count > 0){
-                            // callAPIMethod("groups.getById", GROUPS_GET_BY_ID_REQUEST_ID,)
-                        }
+                        // let ids = [];
+                        // data.items.forEach(groupId => {
+                        //     ids.push(groupId);
+                        //     if (ids.count === 500){
+                        //         callAPIMethod("groups.getById", GROUPS_GET_BY_ID_REQUEST_ID, { "group_ids": ids.join(',') });
+                        //         ids = [];
+                        //     }
+                        // });
+                        // if (ids.count > 0){
+                        //     // callAPIMethod("groups.getById", GROUPS_GET_BY_ID_REQUEST_ID,)
+                        // }
                     };
                     // data.items.forEach(g => {
                     //     let key = `${g.name}-${g.id}`;
@@ -65,7 +65,7 @@ let getGroupsData = (userId = "1") => {
             // todo: unsubscribe from onUsersDataReceived after all users data received
             // console.log(data.response);
             data.response.items.flat().forEach(userId => {
-                callAPIMethod("groups.get", `${GROUPS_GET_REQEST_ID} ${userId}`, "user_id", userId);
+                callAPIMethod("groups.get", `${GROUPS_GET_REQEST_ID} ${userId}`, { "user_id":  userId, "extended": 1 });
             });
         }
     };

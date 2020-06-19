@@ -8,6 +8,8 @@ import bridge from "@vkontakte/vk-bridge";
 import Home from './panels/Home';
 import Persik from './panels/Persik';
 
+let progress = 70;
+
 const App = () => {
 	const [activePanel, setActivePanel] = useState('home');
 	const [fetchedUser, setUser] = useState(null);
@@ -38,7 +40,7 @@ const App = () => {
 
 	return (
 		<View activePanel={activePanel} popout={popout}>
-			<Home id='home' fetchedUser={fetchedUser} go={go} />
+			<Home id='home' fetchedUser={fetchedUser} go={go} progress={progress}/>
 			<Persik id='persik' go={go} />
 		</View>
 	);
