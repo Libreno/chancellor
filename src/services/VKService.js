@@ -8,7 +8,7 @@ let token = null;
 let friendsCount = 0;
 let scheduledTime_ms = 0;
 
-const requestInterval_ms = 334;
+const requestInterval_ms = 350;
 
 const callAPI = (method, requestId, params) => { 
     let request = {
@@ -31,7 +31,7 @@ const callAPI = (method, requestId, params) => {
         setTimeout(() => {
             bridge.send("VKWebAppCallAPIMethod", request);
         }, timeout);
-        console.log(`wait ${timeout} ms`);
+        log(`wait ${timeout} ms`);
     }
 };
 
@@ -50,23 +50,26 @@ const getGroupsData = (progress, userId = "1") => {
         if (type === "VKWebAppCallAPIMethodResult" && data.request_id === FRIENDS_GET_REQEST_ID){
             bridge.unsubscribe(onFriendsDataReceived);
             const onGroupsDataReceived = ({ detail: { type, data }}) => {
-                console.log({ detail: { type, data }});
+                log({ detail: { type, data }});
                 if (type === "VKWebAppCallAPIMethodFailed" && data.error_data.error_reason.error_code === 6){
                     // In case of error: too many requests per second - reschedule the request
-                    let params = data.error_data.error_reason.request_params;
-                    callAPI("groups.get", params.find(p => p.key === "request_id").value, params);
+                    let params = data.error_data.error_reason.request_params.reduce((o, cv) => {o[cv.key] = cv.value; return o;}, {});
+                    log('repeat')
+                    log(params)
+                    callAPI("groups.get", `${params.request_id} repeat`, params);
                 }
                 else{
                     progress = ++friendsDataReceived * 100 / friendsCount;
                     if (friendsDataReceived === friendsCount){
                         bridge.unsubscribe(onGroupsDataReceived);
+                        log('onGroupsDataReceived unsubscribed');
                     }
                 };
                 if (type === "VKWebAppCallAPIMethodResult" && data.request_id.startsWith(GROUPS_GET_REQEST_ID)){
                     let requestedUserId = data.request_id.split(' ')[1];
-                    console.log(`requestedUserId ${requestedUserId}`);
+                    log(`requestedUserId ${requestedUserId}`);
                     if (!!data.response.items){
-                        console.log(`progress ${progress}`);
+                        log(`progress ${progress}`);
                         // let key = `${g.name}-${g.id}`;
                         // let val = groupsData.get(key);
                         // groupsData.set(key, val === undefined? 1: ++val);
@@ -90,5 +93,14 @@ const VKService = {
     GetUserInfo: () => { return bridge.send('VKWebAppGetUserInfo')},
     GetGroupsData: getGroupsData
 }
+
+const log = (message) => {
+    var today = new Date();
+    var time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds() + ":" + today.getMilliseconds();
+    console.log(`${time} => ${message}`);
+    if (typeof message === 'object'){
+        console.log(message);
+    }
+};
 
 export default VKService;
