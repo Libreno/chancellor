@@ -18,7 +18,6 @@
     "react-scripts": "^3.4.1"
   },
   "dependencies": {
-    "@react-hook/throttle": "^2.2.0",
     "@vkontakte/icons": "^1.18.2",
     "@vkontakte/vk-bridge": "^2.2.2",
     "@vkontakte/vk-miniapps-deploy": "0.0.17",
