@@ -3,7 +3,6 @@ import bridge from "@vkontakte/vk-bridge";
 const API_VERSION = "5.110";
 const FRIENDS_GET_REQEST_ID = "friends.get";
 const GROUPS_GET_REQEST_ID = "groups.get";
-// const GROUPS_GET_BY_ID_REQUEST_ID = "groups.getById";
 
 let token = null;
 let friendsCount = 0;
@@ -40,7 +39,6 @@ const getGroupsData = (progress, userId = "1") => {
     const onTokenReceived = ({ detail: { type, data }}) => {
         if (type === "VKWebAppAccessTokenReceived") {
             token = data.access_token;
-            // console.log(`token ${token}`);
             bridge.unsubscribe(onTokenReceived);
             callAPI("friends.get", FRIENDS_GET_REQEST_ID, { "userIds": userId });
         }
@@ -51,8 +49,6 @@ const getGroupsData = (progress, userId = "1") => {
     async function onFriendsDataReceived({ detail: { type, data }}) {
         if (type === "VKWebAppCallAPIMethodResult" && data.request_id === FRIENDS_GET_REQEST_ID){
             bridge.unsubscribe(onFriendsDataReceived);
-            // console.log('flat');
-            // console.log(data.response.items.flat());
             const onGroupsDataReceived = ({ detail: { type, data }}) => {
                 console.log({ detail: { type, data }});
                 if (type === "VKWebAppCallAPIMethodFailed" && data.error_data.error_reason.error_code === 6){
@@ -62,39 +58,22 @@ const getGroupsData = (progress, userId = "1") => {
                 }
                 else{
                     progress = ++friendsDataReceived * 100 / friendsCount;
+                    if (friendsDataReceived === friendsCount){
+                        bridge.unsubscribe(onGroupsDataReceived);
+                    }
                 };
                 if (type === "VKWebAppCallAPIMethodResult" && data.request_id.startsWith(GROUPS_GET_REQEST_ID)){
                     let requestedUserId = data.request_id.split(' ')[1];
                     console.log(`requestedUserId ${requestedUserId}`);
                     if (!!data.response.items){
-                        // progress = ++friendsDataReceived * 100 / friendsCount;
                         console.log(`progress ${progress}`);
                         // let key = `${g.name}-${g.id}`;
                         // let val = groupsData.get(key);
                         // groupsData.set(key, val === undefined? 1: ++val);
-                        // console.log(`No groups for user ${requestedUserId}`);
-                        // let ids = [];
-                        // data.items.forEach(groupId => {
-                        //     ids.push(groupId);
-                        //     if (ids.count === 500){
-                        //         callAPIMethod("groups.getById", GROUPS_GET_BY_ID_REQUEST_ID, { "group_ids": ids.join(',') });
-                        //         ids = [];
-                        //     }
-                        // });
-                        // if (ids.count > 0){
-                        //     // callAPIMethod("groups.getById", GROUPS_GET_BY_ID_REQUEST_ID,)
-                        // }
                     };
-                    // data.items.forEach(g => {
-                    //     let key = `${g.name}-${g.id}`;
-                    //     let val = groupsData.get(key);
-                    //     groupsData.set(key, val === undefined? 1: ++val);
-                    // })
                 }
             };
             bridge.subscribe(onGroupsDataReceived);
-            // todo: unsubscribe from onUsersDataReceived after all users data received
-            // console.log(data.response);
             let friends = data.response.items.flat();
             friendsCount = friends.length;
             friends.forEach(userId => {
