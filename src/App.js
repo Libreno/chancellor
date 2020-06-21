@@ -8,12 +8,11 @@ import bridge from "@vkontakte/vk-bridge";
 import Home from './panels/Home';
 import Persik from './panels/Persik';
 
-let progress = 70;
-
 const App = () => {
 	const [activePanel, setActivePanel] = useState('home');
 	const [fetchedUser, setUser] = useState(null);
 	const [popout, setPopout] = useState(<ScreenSpinner size='large' />);
+	const [progress, setProgress] = useState(0);
 
 	useEffect(() => {
 		bridge.subscribe(({ detail: { type, data }}) => {
@@ -27,7 +26,7 @@ const App = () => {
 			const user = await VKService.GetUserInfo();
 			//console.log('VKWebAppGetUserInfo received ' + JSON.stringify(user));
 			//console.log("getting friends");
-			await VKService.GetGroupsData();
+			await VKService.GetGroupsData(setProgress);
 			setUser(user);
 			setPopout(null);
 		}
