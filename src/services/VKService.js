@@ -49,7 +49,7 @@ const getGroupsData = (onProgress, userId = "1") => {
         if (type === "VKWebAppAccessTokenReceived") {
             token = data.access_token;
             bridge.unsubscribe(onTokenReceived);
-            callAPI("friends.get", FRIENDS_GET_REQEST_ID, { "userIds": userId });
+            callAPI("friends.get", FRIENDS_GET_REQEST_ID, { "user_id": userId });
         }
     };
     bridge.subscribe(onTokenReceived);
@@ -75,8 +75,9 @@ const getGroupsData = (onProgress, userId = "1") => {
                             log(params)
                             callAPI("groups.get", `${params.request_id} repeat`, params);
                             break;
+                        case 30:
                         case 7:
-                            log(`closed profile ${params.user_id}`);
+                            log(`private profile or groups are hidden by user ${params.user_id}`);
                             closedProfiles.push(params.user_id);
                             break;
                         case 18:
@@ -117,8 +118,8 @@ const getGroupsData = (onProgress, userId = "1") => {
             bridge.subscribe(onGroupsDataReceived);
             let friends = data.response.items;
             friendsCount = friends.length;
-            friends.forEach(userId => {
-                callAPI("groups.get", `${GROUPS_GET_REQEST_ID} ${userId}`, { "user_id":  userId, "extended": 1 });
+            friends.forEach(friendId => {
+                callAPI("groups.get", `${GROUPS_GET_REQEST_ID} ${friendId}`, { "user_id":  friendId, "extended": 1 });
             });
         }
     };
