@@ -1,6 +1,8 @@
 import bridge from "@vkontakte/vk-bridge";
 
 const createVKService = () => {
+    const APP_ID = 7505513;
+    const APP_SCOPE = "friends";
     const API_VERSION = "5.110";
     const FRIENDS_GET_REQEST_ID = "friends.get";
     const GROUPS_GET_REQEST_ID = "groups.get";
@@ -13,25 +15,30 @@ const createVKService = () => {
     let groupsData = new Map();
     let friendsCount = 0;
     let friendsDataReceived = 0;
-    let closedProfiles = [];
-    let deletedProfiles = [];
+    let deletedOrClosedProfiles = [];
 
-    const LOCAL_STORAGE_PREFIX = "AllFriends_ba0bdfc8-3a48-41d7-ad35-ae6919fcde79"
+    let SKIP_PROFILES_IDS_KEY = '';
+    let GROUPS_DATA_KEY = '';
+
+    const LOCAL_STORAGE_PREFIX = "AllFriends"
 
     const requestInterval_ms = 350;
 
     const getGroupsData = (setProgress, userId) => { 
         onProgress = setProgress;
         profileUserId = userId;
-        let val = localStorage.getItem(getLocalStorageKey());
+        SKIP_PROFILES_IDS_KEY = `${profileUserId} deletedOrClosedProfiles`
+        GROUPS_DATA_KEY = `${profileUserId} groupsData`;
+
+        let val = getFromCache(GROUPS_DATA_KEY);
         if (!!val){
-            log('Groups data loaded from local storage');
-            log(JSON.parse(val));
             return;
         };
 
+        deletedOrClosedProfiles = getFromCache(SKIP_PROFILES_IDS_KEY) ?? deletedOrClosedProfiles;
+
         bridge.subscribe(listener);
-        bridge.send("VKWebAppGetAuthToken", {"app_id": 7505513, "scope": "friends"});
+        bridge.send("VKWebAppGetAuthToken", {"app_id": APP_ID, "scope": APP_SCOPE});
     };
 
     const listener = (obj) => {
@@ -42,6 +49,9 @@ const createVKService = () => {
                 onTokenReceived(data);
                 break;
             case ("VKWebAppCallAPIMethodResult"):
+                if (!getFromCache(data.request_id)){
+                    saveToCache(data, data.request_id);
+                };
                 if (data.request_id.startsWith(FRIENDS_GET_REQEST_ID)){
                     onFriendsDataReceived(data);
                 } else if (data.request_id.startsWith(GROUPS_GET_REQEST_ID)){
@@ -55,7 +65,7 @@ const createVKService = () => {
                 if (errorCode === 6){
                     // In case of error: too many requests per second - reschedule the request
                     log('repeat')
-                    callAPI("groups.get", `${params.request_id} repeat`, params);
+                    callAPI("groups.get", params.request_id, params);
                 }
                 else {
                     onProgress(++friendsDataReceived * 100 / friendsCount);
@@ -69,14 +79,31 @@ const createVKService = () => {
 
     const onTokenReceived = (data) => {
         token = data.access_token;
-        callAPI("friends.get", FRIENDS_GET_REQEST_ID, profileUserId === undefined? {} : { "user_id": profileUserId });
+        let requestId = getRequestId(FRIENDS_GET_REQEST_ID, profileUserId);
+        let dataCached = getFromCache(requestId);
+        if (!!dataCached){
+            onFriendsDataReceived(dataCached);
+        } 
+        else {
+            callAPI("friends.get", requestId, profileUserId === undefined? {} : { "user_id": profileUserId });
+        }
     };
 
     const onFriendsDataReceived = (data) => {
         let friends = data.response.items;
         friendsCount = friends.length;
         friends.forEach(friendId => {
-            callAPI("groups.get", `${GROUPS_GET_REQEST_ID} ${friendId}`, { "user_id":  friendId, "extended": 1 });
+            if (deletedOrClosedProfiles.indexOf(friendId) !== -1){
+                return;
+            };
+            let requestId = getRequestId(GROUPS_GET_REQEST_ID, friendId, 1);
+            let dataCached = getFromCache(requestId);
+            if (!!dataCached){
+                onGroupsDataReceived(dataCached);
+            }
+            else {
+                callAPI("groups.get", requestId, { "user_id":  friendId, "extended": 1 });
+            }
         });
     };
 
@@ -84,12 +111,9 @@ const createVKService = () => {
         switch(errorCode){
             case 30:
             case 7:
-                log(`private profile or groups are hidden by user ${userId}`);
-                closedProfiles.push(userId);
-                break;
             case 18:
-                log(`deleted profile ${userId}`);
-                deletedProfiles.push(userId);
+                log(`private or deleted profile or groups are hidden by user ${userId}`);
+                deletedOrClosedProfiles.push(userId);
                 break;
             default:
                 log('unknown error');
@@ -108,14 +132,9 @@ const createVKService = () => {
         };
         if (friendsDataReceived === friendsCount){
             bridge.unsubscribe(listener);
-            log('onGroupsDataReceived unsubscribed');
             let groupsDataArr = Array.from(groupsData.entries()).sort((a,b)=>{return b[1]-a[1];});
-            log(groupsDataArr);
-            log('closed profiles');
-            log(closedProfiles);
-            log('deleted profiles')
-            log(deletedProfiles);
-            SaveToLocalStorage(groupsDataArr, getLocalStorageKey());
+            saveToCache(deletedOrClosedProfiles, SKIP_PROFILES_IDS_KEY);
+            saveToCache(groupsDataArr, GROUPS_DATA_KEY);
         };
     };
 
@@ -156,15 +175,27 @@ const createVKService = () => {
         }
     };
 
-    function getLocalStorageKey() {
-        return `${LOCAL_STORAGE_PREFIX}_${profileUserId}`;
+    function getRequestId(method, user_id, extended) {
+        return `${method} user_id:${user_id} extended:${extended} api_ver:${API_VERSION} appId:${APP_ID} scope:${APP_SCOPE}`;
+    }
+    
+    function getFromCache(request_id) {
+        let fullKey = `${LOCAL_STORAGE_PREFIX} ${request_id}`;
+        let dataCached = sessionStorage.getItem(fullKey);
+        if (!dataCached){
+            return;
+        };
+        log(`Data loaded from sessionStorage with key '${fullKey}'.`)
+        let dataParsed = JSON.parse(dataCached);
+        log(dataParsed);
+        return dataParsed;
     }
 
-    function SaveToLocalStorage(groupsDataArr, localStorageKey) {
+    function saveToCache(groupsDataArr, request_id) {
         try {
             let strData = JSON.stringify(groupsDataArr);
-            log(`Trying to save string with ${strData.length} chars in localStorage.`);
-            localStorage.setItem(localStorageKey, strData);
+            log(`Trying to save string with ${strData.length} chars in sessionStorage.`);
+            sessionStorage.setItem(`${LOCAL_STORAGE_PREFIX} ${request_id}`, strData);
             log(`Data saved successfully!`);
         }
         catch (e) {
