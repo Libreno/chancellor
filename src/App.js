@@ -13,6 +13,7 @@ const App = () => {
 	const [fetchedUser, setUser] = useState(null);
 	const [popout, setPopout] = useState(<ScreenSpinner size='large' />);
 	const [progress, setProgress] = useState(0);
+	const [items, setItems] = useState([]);
 
 	useEffect(() => {
 		bridge.subscribe(({ detail: { type, data }}) => {
@@ -26,7 +27,7 @@ const App = () => {
 			const user = await VKService.GetUserInfo();
 			//console.log('VKWebAppGetUserInfo received ' + JSON.stringify(user));
 			//console.log("getting friends");
-			await VKService.GetGroupsData(setProgress);
+			await VKService.GetGroupsData(undefined, setProgress, setItems);
 			setUser(user);
 			setPopout(null);
 		}
@@ -39,7 +40,7 @@ const App = () => {
 
 	return (
 		<View activePanel={activePanel} popout={popout}>
-			<Home id='home' fetchedUser={fetchedUser} go={go} progress={progress}/>
+			<Home id='home' fetchedUser={fetchedUser} go={go} progress={progress} items={items}/>
 			<Persik id='persik' go={go} />
 		</View>
 	);

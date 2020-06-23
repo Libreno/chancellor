@@ -8,8 +8,9 @@ import Group from '@vkontakte/vkui/dist/components/Group/Group';
 import Cell from '@vkontakte/vkui/dist/components/Cell/Cell';
 import Div from '@vkontakte/vkui/dist/components/Div/Div';
 import Avatar from '@vkontakte/vkui/dist/components/Avatar/Avatar';
+import { List } from '@vkontakte/vkui';
 
-const Home = ({ id, go, fetchedUser, progress }) => (
+const Home = ({ id, go, fetchedUser, progress, items }) => (
 	<Panel id={id}>
 		<PanelHeader>Канцлер</PanelHeader>
 		{fetchedUser &&
@@ -23,6 +24,13 @@ const Home = ({ id, go, fetchedUser, progress }) => (
 		</Group>}
 
 		<Progress value={progress} />
+
+		<Group>
+			<List>
+				{items.map((item) => <Cell key={item[0]}>[{item[1].friends}] {item[1].name} </Cell>)}
+			</List>
+		</Group>
+
 		<Group title="Navigation Example" hidden={true}>
 			<Div>
 				<Button size="xl" level="2" onClick={go} data-to="persik">
