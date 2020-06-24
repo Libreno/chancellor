@@ -6,6 +6,7 @@ const createVKService = () => {
     const API_VERSION = "5.110";
     const FRIENDS_GET_REQEST_ID = "friends.get";
     const GROUPS_GET_REQEST_ID = "groups.get";
+    const FRIENDS_MAX_COUNT_PER_REQUEST = 5000;
 
     let profileUserId = 0;
     let token = null;
@@ -16,16 +17,27 @@ const createVKService = () => {
     let groupsData = null;
     let friendsCount = 0;
     let friendsDataReceived = 0;
+    let friendsRequestOffset = 0;
+
     let deletedOrClosedProfiles = [];
 
     let SKIP_PROFILES_IDS_KEY = '';
     let GROUPS_DATA_KEY = '';
 
-    const TOP_DATA_ITEMS_COUNT = 9;
+    const TOP_DATA_MAX_NUM = 9;
+
+    let requestsQueued = 0;
+    let requestsSent = 0;
+
+    let statisticsShowPlanned = false;
+
+    let topData = [];
+    let topDataKeys = new Set();
 
     // const CACHE_PREFIX = "AllFriends"
 
-    const requestInterval_ms = 350;
+    // limit 3 requests per second
+    const REQUEST_INTERVAL = 350;
 
     const getGroupsData = (userId, setProgress, setItems) => { 
         onProgress = setProgress;
@@ -45,7 +57,7 @@ const createVKService = () => {
 
         bridge.subscribe(listener);
         if (!token){
-            bridge.send("VKWebAppGetAuthToken", {"app_id": APP_ID, "scope": APP_SCOPE});
+            bridge.send("VKWebAppGetAuthToken", {app_id: APP_ID, scope: APP_SCOPE});
         }
         else {
             onTokenReceived({access_token: token});
@@ -71,12 +83,11 @@ const createVKService = () => {
                 break;
             case ("VKWebAppCallAPIMethodFailed"):
                 let params = data.error_data.error_reason.request_params.reduce((o, cv) => {o[cv.key] = cv.value; return o;}, {});
-                log(params);
                 let errorCode = data.error_data.error_reason.error_code;
                 if (errorCode === 6){
                     // In case of error: too many requests per second - reschedule the request
-                    log('repeat')
-                    callAPI("groups.get", params.request_id, params);
+                    log('repeat request')
+                    callAPI(params.method, params.request_id, params);
                 }
                 else {
                     onProgress(++friendsDataReceived * 100 / friendsCount);
@@ -90,19 +101,28 @@ const createVKService = () => {
 
     const onTokenReceived = (data) => {
         token = data.access_token;
-        let requestId = getRequestId(FRIENDS_GET_REQEST_ID, profileUserId);
-        let dataCached = getFromCache(requestId);
-        if (!!dataCached){
-            onFriendsDataReceived(dataCached);
-        } 
-        else {
-            callAPI("friends.get", requestId, profileUserId === undefined? {} : { "user_id": profileUserId });
-        }
-    };
+        callAPI("friends.get", FRIENDS_GET_REQEST_ID, profileUserId === undefined? {} : { user_id: profileUserId, count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: friendsRequestOffset });
 
+        // let requestId = getRequestId(FRIENDS_GET_REQEST_ID, profileUserId, undefined, FRIENDS_MAX_COUNT_PER_REQUEST, friendsRequestOffset);
+        // let dataCached = getFromCache(requestId);
+        // if (!!dataCached){
+        //     onFriendsDataReceived(dataCached);
+        // } 
+        // else {
+            // callAPI("friends.get", requestId, profileUserId === undefined? {} : { "user_id": profileUserId, "count": FRIENDS_MAX_COUNT_PER_REQUEST, "offset": friendsRequestOffset });
+        // }
+    };
     const onFriendsDataReceived = (data) => {
         let friends = data.response.items;
-        friendsCount = friends.length;
+        friendsCount += friends.length;
+        log(`friendsCount = ${friendsCount} data.response.count = ${data.response.count}`);
+        let requestedFriendsCount = friendsCount;
+        while (requestedFriendsCount < data.response.count){
+            friendsRequestOffset += FRIENDS_MAX_COUNT_PER_REQUEST;
+            requestedFriendsCount += FRIENDS_MAX_COUNT_PER_REQUEST;
+            callAPI("friends.get", FRIENDS_GET_REQEST_ID, profileUserId === undefined? {} : { user_id: profileUserId, count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: friendsRequestOffset });
+        }
+
         friends.forEach(friendId => {
             if (deletedOrClosedProfiles.indexOf(friendId) !== -1){
                 return;
@@ -113,7 +133,7 @@ const createVKService = () => {
                 onGroupsDataReceived(dataCached);
             }
             else {
-                callAPI("groups.get", requestId, { "user_id":  friendId, "extended": 1 });
+                callAPI("groups.get", requestId, { user_id:  friendId, extended: 1});
             }
         });
     };
@@ -123,11 +143,14 @@ const createVKService = () => {
             case 30:
             case 7:
             case 18:
-                log(`private or deleted profile or groups are hidden by user ${userId}`);
+                log(`Info: private or deleted profile or groups are hidden by user ${userId}`);
                 deletedOrClosedProfiles.push(userId);
                 break;
+            case 29:
+                log("Error: rate limit reached, please, wait for one hour before calling api method again.")
+                break;
             default:
-                log('unknown error');
+                log('Error: unknown error');
                 break;
         }
     }
@@ -142,13 +165,9 @@ const createVKService = () => {
         };
         onProgress(++friendsDataReceived * 100 / friendsCount);
         onUpdateItems(getTopData());
-        if (friendsDataReceived === friendsCount){
-            bridge.unsubscribe(listener);
-            let groupsDataArr = Array.from(groupsData.entries()).sort((a,b)=>{return b[1].friends-a[1].friends;});
-            saveToCache(deletedOrClosedProfiles, SKIP_PROFILES_IDS_KEY);
-            saveToCache(groupsDataArr, GROUPS_DATA_KEY);
-            log(deletedOrClosedProfiles);
-            log(groupsDataArr);
+        if (!statisticsShowPlanned && requestsQueued === requestsSent){
+            statisticsShowPlanned = true;
+            finish();
         };
     };
 
@@ -171,26 +190,20 @@ const createVKService = () => {
         };
         params["v"] = API_VERSION;
         params["access_token"] = token;
-        log(request);
 
-        // first call runs without delay
-        if (scheduledTime_ms === 0){
+        scheduledTime_ms = Math.max(scheduledTime_ms + REQUEST_INTERVAL, Date.now());
+        let timeout = scheduledTime_ms - Date.now();
+        setTimeout(() => {
+            log(request);
             bridge.send("VKWebAppCallAPIMethod", request);
-            scheduledTime_ms = Date.now();
-        }
-        else{
-            // limit 3 requests per second
-            scheduledTime_ms = Math.max(scheduledTime_ms + requestInterval_ms, Date.now());
-            let timeout = scheduledTime_ms - Date.now();
-            setTimeout(() => {
-                bridge.send("VKWebAppCallAPIMethod", request);
-            }, timeout);
-            log(`wait ${timeout} ms`);
-        }
+            requestsSent++;
+        }, timeout);
+        log(`wait ${timeout} ms`);
+        requestsQueued++;
     };
 
-    const getRequestId = (method, user_id, extended) => {
-        return `${method} user_id:${user_id} extended:${extended} api_ver:${API_VERSION} appId:${APP_ID} scope:${APP_SCOPE}`;
+    const getRequestId = (method, user_id, extended, count, offset) => {
+        return `${method} user_id:${user_id} extended:${extended} api_ver:${API_VERSION} appId:${APP_ID} scope:${APP_SCOPE} count: ${count} offset: ${offset}`;
     }
     
     const getFromCache = (request_id) => {
@@ -219,9 +232,88 @@ const createVKService = () => {
         // };
     };
 
+    // const getTopData = () => {
+    //     return Array.from(groupsData.entries()).sort((a,b)=>{return b[1].friends-a[1].friends;}).slice(0, TOP_DATA_ITEMS_COUNT);
+    // };
+
+    // eslint-disable-next-line
+    let myTopDataTime = 0;
+    // eslint-disable-next-line
+    let stdTopDataTime = 0;
+
     const getTopData = () => {
-        return Array.from(groupsData.entries()).sort((a,b)=>{return b[1].friends-a[1].friends;}).slice(0, TOP_DATA_ITEMS_COUNT);
-    };
+        let beginTime = Date.now();
+        let entr = groupsData.entries();
+        let i = 0;
+        // log(`begin topData`); log(topData);
+        while (i++ < groupsData.size){
+            let newEl = entr.next();
+            if (topData[TOP_DATA_MAX_NUM] === undefined || topData[TOP_DATA_MAX_NUM].value[1].friends < newEl.value[1].friends){
+                // log(`candidate newEl = ${newEl.value[1].friends} ${JSON.stringify(newEl)}`);
+                if (topDataKeys.has(newEl.value[0])){
+                    for(let j = 0; j <= TOP_DATA_MAX_NUM; j++)
+                    {
+                        // log(`topData[${j}] = ${JSON.stringify(topData[j])}`);
+                        // if (!topData[j]){
+                        //     log(`topData[${j}] = undefined`);
+                        // };
+
+                        if (topData[j].value[0] === newEl.value[0]){
+                            if (topData[j].value[1].friends === newEl.value[1].friends){
+                                break;
+                            };
+                            topData[j].value[1].friends = newEl.value[1].friends;
+                            topData.sort((a, b) => { if (b === undefined){ return -1;}; if (a === undefined){ return 1;}; return b.value[1].friends - a.value[1].friends; });
+                            // log(`key ${newEl.value[0]} found, updated & sorted.`);
+                            // log(`${JSON.stringify(topData)}`)
+                            break;
+                        };
+                    };
+                } else {
+                    topDataKeys.add(newEl.value[0]);
+                    let tmp = null;
+                    for(let j = 0; j <= TOP_DATA_MAX_NUM; j++){
+                        if (topData[j] === undefined){
+                            topData[j] = newEl;
+                            break;
+                        };
+                        if (topData[j].value[1].friends < newEl.value[1].friends){
+                            tmp = topData[j];
+                            topData[j] = newEl;
+                            newEl = tmp;
+                        }
+                    };
+                    // exclude removable element key from set
+                    if (!!tmp){
+                        topDataKeys.delete(tmp.value[0]);
+                    };
+                };
+                // log(`topData = ${topData[TOP_DATA_MAX_NUM]?.value[1].friends} ${JSON.stringify(topData)}`);
+                // log(`s = ${JSON.stringify(Array.from(s.entries()).map(e => {return e[0];}))}`);
+            };
+        };
+        let res = Array.from(topData);
+        myTopDataTime += Date.now() - beginTime;
+        let beginStd = Date.now();
+        let res1 = Array.from(groupsData.entries()).sort((a,b)=>{return b[1].friends-a[1].friends;}).slice(0, TOP_DATA_MAX_NUM + 1);
+        stdTopDataTime += Date.now() - beginStd;
+        // log(`- ${JSON.stringify(res)}`);
+        log(`res1 - ${JSON.stringify(res1).length}`);
+        return res;
+        // return JSON.stringify(topData);//.map((e) => { return e.value;});
+    }
+    
+    function finish() {
+        // bridge.unsubscribe(listener);
+        log(`requestsSent = ${requestsSent}`);
+        log(`requestsQueued = ${requestsQueued}`);
+        log(`friendsCount = ${friendsCount}`);
+        log(`friendsDataReceived = ${friendsDataReceived}`);
+        log(myTopDataTime);
+        log(stdTopDataTime);
+        let groupsDataArr = Array.from(groupsData.entries()).sort((a, b) => { return b[1].friends - a[1].friends; });
+        log(groupsDataArr);
+    }
 
     return {
         Init: () => {return bridge.send("VKWebAppInit")},

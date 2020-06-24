@@ -27,7 +27,7 @@ const Home = ({ id, go, fetchedUser, progress, items }) => (
 
 		<Group>
 			<List>
-				{items.map((item) => <Cell key={item[0]}>[{item[1].friends}] {item[1].name} </Cell>)}
+				{items.map((item) => <Cell key={item.value[0]}>[{item.value[1].friends}] {item.value[1].name} </Cell>)}
 			</List>
 		</Group>
 
