@@ -3,10 +3,10 @@ import "core-js/features/set";
 import React from "react";
 import ReactDOM from "react-dom";
 import App from "./App";
-import VKService from "./services/VKService"
+import VKDataService from "./services/VKDataService"
 
 // Init VK  Mini App
-VKService.Init();
+VKDataService.Init();
 
 ReactDOM.render(<App />, document.getElementById("root"));
 if (process.env.NODE_ENV === "development") {

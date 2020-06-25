@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import View from '@vkontakte/vkui/dist/components/View/View';
 import ScreenSpinner from '@vkontakte/vkui/dist/components/ScreenSpinner/ScreenSpinner';
 import '@vkontakte/vkui/dist/vkui.css';
-import VKService from "./services/VKService"
+import VKDataService from "./services/VKDataService"
 import bridge from "@vkontakte/vk-bridge";
 
 import Home from './panels/Home';
@@ -24,10 +24,9 @@ const App = () => {
 			}
 		});
 		async function fetchData() {
-			const user = await VKService.GetUserInfo();
-			//console.log('VKWebAppGetUserInfo received ' + JSON.stringify(user));
-			//console.log("getting friends");
-			await VKService.GetGroupsData(undefined, setProgress, setItems);
+			const user = await VKDataService.GetUserInfo();
+			//bridge.send("VKWebAppGetFriends", {});
+			await VKDataService.GetGroupsData(user?.id, setProgress, setItems);
 			setUser(user);
 			setPopout(null);
 		}

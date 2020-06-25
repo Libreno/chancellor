@@ -1,6 +1,6 @@
 import bridge from "@vkontakte/vk-bridge";
 
-const createVKService = () => {
+const createVKDataService = () => {
     const APP_ID = 7505513;
     const APP_SCOPE = "friends";
     const API_VERSION = "5.110";
@@ -22,8 +22,8 @@ const createVKService = () => {
 
     let deletedOrClosedProfiles = [];
 
-    let SKIP_PROFILES_IDS_KEY = '';
-    let GROUPS_DATA_KEY = '';
+    // let SKIP_PROFILES_IDS_KEY = '';
+    // let GROUPS_DATA_KEY = '';
 
     let requestsQueued = 0;
     let requestsSent = 0;
@@ -44,15 +44,15 @@ const createVKService = () => {
         groupsData = new Map();
 
         profileUserId = userId;
-        SKIP_PROFILES_IDS_KEY = `${profileUserId} deletedOrClosedProfiles`
-        GROUPS_DATA_KEY = `${profileUserId} groupsData`;
+        // SKIP_PROFILES_IDS_KEY = `${profileUserId} deletedOrClosedProfiles`
+        // GROUPS_DATA_KEY = `${profileUserId} groupsData`;
 
-        let val = getFromCache(GROUPS_DATA_KEY);
-        if (!!val){
-            return;
-        };
+        // let val = getFromCache(GROUPS_DATA_KEY);
+        // if (!!val){
+        //     return;
+        // };
 
-        deletedOrClosedProfiles = getFromCache(SKIP_PROFILES_IDS_KEY) ?? deletedOrClosedProfiles;
+        // deletedOrClosedProfiles = getFromCache(SKIP_PROFILES_IDS_KEY) ?? deletedOrClosedProfiles;
 
         bridge.subscribe(listener);
         if (!token){
@@ -71,9 +71,9 @@ const createVKService = () => {
                 onTokenReceived(data);
                 break;
             case ("VKWebAppCallAPIMethodResult"):
-                if (!getFromCache(data.request_id)){
-                    saveToCache(data, data.request_id);
-                };
+                // if (!getFromCache(data.request_id)){
+                //     saveToCache(data, data.request_id);
+                // };
                 if (data.request_id.startsWith(FRIENDS_GET_REQEST_ID)){
                     onFriendsDataReceived(data);
                 } else if (data.request_id.startsWith(GROUPS_GET_REQEST_ID)){
@@ -129,13 +129,13 @@ const createVKService = () => {
                 return;
             };
             let requestId = getRequestId(GROUPS_GET_REQEST_ID, friendId, 1);
-            let dataCached = getFromCache(requestId);
-            if (!!dataCached){
-                onGroupsDataReceived(dataCached);
-            }
-            else {
+            // let dataCached = getFromCache(requestId);
+            // if (!!dataCached){
+            //     onGroupsDataReceived(dataCached);
+            // }
+            // else {
                 callAPI("groups.get", requestId, { user_id:  friendId, extended: 1});
-            }
+            // }
         });
     };
 
@@ -213,8 +213,7 @@ const createVKService = () => {
         return `${method} user_id:${user_id} extended:${extended} api_ver:${API_VERSION} appId:${APP_ID} scope:${APP_SCOPE} count: ${count} offset: ${offset}`;
     }
     
-    const getFromCache = (request_id) => {
-        return null;
+    // const getFromCache = (request_id) => {
         // let fullKey = `${CACHE_PREFIX} ${request_id}`;
         // let dataCached = sessionStorage.getItem(fullKey);
         // if (!dataCached){
@@ -224,10 +223,9 @@ const createVKService = () => {
         // let dataParsed = JSON.parse(dataCached);
         // log(dataParsed);
         // return dataParsed;
-    }
+    // }
 
-    const saveToCache = (groupsDataArr, request_id) => {
-        return;
+    // const saveToCache = (groupsDataArr, request_id) => {
         // try {
         //     let strData = JSON.stringify(groupsDataArr);
         //     log(`Trying to save string with ${strData.length} chars in sessionStorage.`);
@@ -237,7 +235,7 @@ const createVKService = () => {
         // catch (e) {
         //     log(e);
         // };
-    };
+    // };
 
     const getTopData = () => {
         let entr = groupsData.entries();
@@ -298,6 +296,6 @@ const createVKService = () => {
     }
 }
 
-const VKService = createVKService();
+const VKDataService = createVKDataService();
 
-export default VKService;
+export default VKDataService;
