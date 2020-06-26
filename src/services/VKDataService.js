@@ -6,6 +6,7 @@ const createVKDataService = () => {
     const API_VERSION = "5.110";
     const FRIENDS_GET_REQEST_ID = "friends.get";
     const GROUPS_GET_REQEST_ID = "groups.get";
+    const USERS_GET_REQEST_ID = "users.get";
     const FRIENDS_MAX_COUNT_PER_REQUEST = 5000;
     const TOP_DATA_MAX_NUM = 9;
 
@@ -13,6 +14,7 @@ const createVKDataService = () => {
     let token = null;
     let onProgress = null;
     let onUpdateItems = null;
+    let onSetUser = null;
     let scheduledTime_ms = 0;
 
     let groupsData = null;
@@ -78,6 +80,8 @@ const createVKDataService = () => {
                     onFriendsDataReceived(data);
                 } else if (data.request_id.startsWith(GROUPS_GET_REQEST_ID)){
                     onGroupsDataReceived(data);
+                } else if (data.request_id.startsWith(USERS_GET_REQEST_ID)){
+                    onSetUser(data);
                 };
                 break;
             case ("VKWebAppCallAPIMethodFailed"):
@@ -100,7 +104,7 @@ const createVKDataService = () => {
 
     const onTokenReceived = (data) => {
         token = data.access_token;
-        callAPI("friends.get", FRIENDS_GET_REQEST_ID, profileUserId === undefined? {} : { user_id: profileUserId, count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: friendsRequestOffset });
+        callAPI("friends.get", FRIENDS_GET_REQEST_ID, { user_id: profileUserId, count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: friendsRequestOffset });
 
         // let requestId = getRequestId(FRIENDS_GET_REQEST_ID, profileUserId, undefined, FRIENDS_MAX_COUNT_PER_REQUEST, friendsRequestOffset);
         // let dataCached = getFromCache(requestId);
@@ -289,9 +293,15 @@ const createVKDataService = () => {
         log(groupsDataArr);
     }
 
+    const getUserInfo = (userName, setUser) => { 
+        callAPI("users.get", USERS_GET_REQEST_ID, { "user_ids": userName });
+        onSetUser = setUser;
+    };
+
     return {
         Init: () => {return bridge.send("VKWebAppInit")},
-        GetUserInfo: () => { return bridge.send('VKWebAppGetUserInfo')},
+        GetCurrentUserInfo: () => { return bridge.send('VKWebAppGetUserInfo')},
+        GetUserInfo: getUserInfo,
         GetGroupsData: getGroupsData,
     }
 }

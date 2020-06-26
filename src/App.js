@@ -15,6 +15,10 @@ const App = () => {
 	const [progress, setProgress] = useState(0);
 	const [items, setItems] = useState([]);
 
+	async function start() {
+		await VKDataService.GetGroupsData(fetchedUser.id, setProgress, setItems);
+	};
+
 	useEffect(() => {
 		bridge.subscribe(({ detail: { type, data }}) => {
 			if (type === 'VKWebAppUpdateConfig') {
@@ -24,10 +28,9 @@ const App = () => {
 			}
 		});
 		async function fetchData() {
-			const user = await VKDataService.GetUserInfo();
-			//bridge.send("VKWebAppGetFriends", {});
-			await VKDataService.GetGroupsData(user?.id, setProgress, setItems);
+			const user = await VKDataService.GetCurrentUserInfo();
 			setUser(user);
+			await start();
 			setPopout(null);
 		}
 		fetchData();
@@ -39,7 +42,7 @@ const App = () => {
 
 	return (
 		<View activePanel={activePanel} popout={popout}>
-			<Home id='home' fetchedUser={fetchedUser} go={go} progress={progress} items={items}/>
+			<Home id='home' fetchedUser={fetchedUser} go={go} progress={progress} items={items} setUser={(user) => {setUser(user); start();}} />
 			<Persik id='persik' go={go} />
 		</View>
 	);
