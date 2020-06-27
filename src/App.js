@@ -7,6 +7,7 @@ import bridge from "@vkontakte/vk-bridge";
 
 import Home from './panels/Home';
 import Persik from './panels/Persik';
+import ChangeUser from './panels/ChangeUser';
 
 const App = () => {
 	const [activePanel, setActivePanel] = useState('home');
@@ -43,6 +44,7 @@ const App = () => {
 	return (
 		<View activePanel={activePanel} popout={popout}>
 			<Home id='home' fetchedUser={fetchedUser} go={go} progress={progress} items={items} setUser={(user) => {setUser(user); start();}} />
+			<ChangeUser id="change_user" go={go}></ChangeUser>
 			<Persik id='persik' go={go} />
 		</View>
 	);

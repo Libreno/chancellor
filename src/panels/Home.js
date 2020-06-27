@@ -39,13 +39,7 @@ const Home = ({ id, go, fetchedUser, progress, items, setUser }) => {
 		<Group>
 			<Cell
 				before={fetchedUser.photo_200 ? <Avatar src={fetchedUser.photo_200}/> : null}
-				asideContent={
-					<Group>
-						<Button style={{marginRight: 8}}>Я</Button>
-						{/* <Group hidden={} ><Button onClick={getFriends}>Выбор</Button></Group> */}
-						{IS_MVK? '' : <Button onClick={getFriends}>Выбор из друзей</Button>}
-						<Input type = "text" onChange={(e) => {setUserLink(e.target.value);}}/><Button onClick={getUserByLink(userLink)}>Загрузить</Button>
-					</Group>}
+				asideContent={<Button size="xl" level="2" onClick={go} data-to="change_user">Сменить пользователя</Button>}
 				description={fetchedUser.city && fetchedUser.city.title ? fetchedUser.city.title : ''}				
 			>
 				{`${fetchedUser.first_name} ${fetchedUser.last_name}`}
