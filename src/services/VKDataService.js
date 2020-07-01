@@ -94,10 +94,11 @@ const createVKDataService = () => {
                     callAPI(params.method, params.request_id, params);
                 }
                 else {
-                    onProgress(++friendsDataReceived * 100 / friendsCount);
                     handleError(errorCode, params.user_id);
                     if (params.request_id.startsWith(USERS_GET_REQEST_ID)){
                         onUserSearchFailed(data);
+                    } else if (params.request_id.startsWith(GROUPS_GET_REQEST_ID)){
+                        onProgress(++friendsDataReceived * 100 / friendsCount);
                     };
                 };
                 break;
