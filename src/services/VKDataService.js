@@ -15,6 +15,7 @@ const createVKDataService = () => {
     let onProgress = null;
     let onUpdateItems = null;
     let onSetUser = null;
+    let onUserSearchFailed = null;
     let scheduledTime_ms = 0;
 
     let groupsData = null;
@@ -95,6 +96,9 @@ const createVKDataService = () => {
                 else {
                     onProgress(++friendsDataReceived * 100 / friendsCount);
                     handleError(errorCode, params.user_id);
+                    if (params.request_id.startsWith(USERS_GET_REQEST_ID)){
+                        onUserSearchFailed(data);
+                    };
                 };
                 break;
             default:
@@ -152,6 +156,7 @@ const createVKDataService = () => {
                 deletedOrClosedProfiles.push(userId);
                 break;
             case 29:
+                // from friends.get
                 log("Error: rate limit reached, please, wait for one hour before calling api method again.")
                 break;
             default:
@@ -293,9 +298,12 @@ const createVKDataService = () => {
         log(groupsDataArr);
     }
 
-    const getUserInfo = (userName, setUser) => { 
-        callAPI("users.get", USERS_GET_REQEST_ID, { "user_ids": userName });
-        onSetUser = setUser;
+    const getUserInfo = (userName) => { 
+        return new Promise((resolve, reject) => {
+            callAPI("users.get", USERS_GET_REQEST_ID, { user_ids: userName, fields: "photo_200, city, nickname"});
+            onSetUser = resolve;
+            onUserSearchFailed = reject;
+        });
     };
 
     return {
