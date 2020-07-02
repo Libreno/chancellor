@@ -35,6 +35,7 @@ const createVKDataService = () => {
 
     let topData = [];
     let topDataKeys = new Set();
+    let friendsRequestsData = new Map();
 
     // const CACHE_PREFIX = "AllFriends"
 
@@ -134,6 +135,7 @@ const createVKDataService = () => {
         }
 
         friends.forEach(friendId => {
+            friendsRequestsData.set(friendId, { request: null, response_received: false});
             if (deletedOrClosedProfiles.indexOf(friendId) !== -1){
                 return;
             };
@@ -176,6 +178,9 @@ const createVKDataService = () => {
         };
         onProgress(++friendsDataReceived * 100 / friendsCount);
         onUpdateItems(getTopData());
+        let userId = data?.request_id?.split(' ')[1].split(':')[1];
+        let reqData = friendsRequestsData.get(parseInt(userId));
+        reqData.response_received = true;
         if (!statisticsShowPlanned && requestsQueued === requestsSent){
             statisticsShowPlanned = true;
             finish();
@@ -195,9 +200,9 @@ const createVKDataService = () => {
 
     const callAPI = (method, requestId, params) => { 
         let request = {
-            "method": method, 
-            "request_id": requestId, 
-            "params": params
+            method: method, 
+            request_id: requestId, 
+            params: params
         };
         params["v"] = API_VERSION;
         params["access_token"] = token;
@@ -209,6 +214,16 @@ const createVKDataService = () => {
                 log(request);
                 bridge.send("VKWebAppCallAPIMethod", request);
                 requestsSent++;
+                let userId = parseInt(request.params.user_id);
+                friendsRequestsData.set(userId, { request: request, response_received: false, request_sent_time: Date.now()});
+                setTimeout(() => {
+                    let reqInfo = friendsRequestsData.get(userId);
+                    if (!reqInfo.response_received){
+                        log(`response not received, userId ${userId}, repeat.`);
+                        log(reqInfo);
+                        callAPI(reqInfo.request.method, reqInfo.request.request_id, reqInfo.request.params);
+                    }
+                }, timeout + 3000);
             }, timeout);
             log(`wait ${timeout} ms`);
             requestsQueued++;
@@ -295,8 +310,8 @@ const createVKDataService = () => {
         log(`requestsQueued = ${requestsQueued}`);
         log(`friendsCount = ${friendsCount}`);
         log(`friendsDataReceived = ${friendsDataReceived}`);
-        let groupsDataArr = Array.from(groupsData.entries()).sort((a, b) => { return b[1].friends - a[1].friends; });
-        log(groupsDataArr);
+        let groupsDataArr = Array.from(groupsData.entries()).sort((a, b) => { return b[1].friends - a[1].friends; }).map((e) => { return {value:[e[0], e[1]] }});
+        onUpdateItems(groupsDataArr);
     }
 
     const getUserInfo = (userName) => { 
