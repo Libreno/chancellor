@@ -9,6 +9,7 @@ const createVKDataService = () => {
     const USERS_GET_REQEST_ID = "users.get";
     const FRIENDS_MAX_COUNT_PER_REQUEST = 5000;
     const TOP_DATA_MAX_NUM = 9;
+    const REQUEST_ATTEMPTS_COUNT_MAX = 3;
 
     let profileUserId = 0;
     let token = null;
@@ -22,8 +23,11 @@ const createVKDataService = () => {
     let friendsCount = 0;
     let friendsDataReceived = 0;
     let friendsRequestOffset = 0;
+    let receivedFriendsResponse = false;
 
     let deletedOrClosedProfiles = [];
+    let attemptsCountExceeded = 0;
+    let friendsErrorResponse = 0;
 
     // let SKIP_PROFILES_IDS_KEY = '';
     // let GROUPS_DATA_KEY = '';
@@ -31,7 +35,7 @@ const createVKDataService = () => {
     let requestsQueued = 0;
     let requestsSent = 0;
 
-    let statisticsShowPlanned = false;
+    let userSawResults = false;
 
     let topData = [];
     let topDataKeys = new Set();
@@ -98,14 +102,15 @@ const createVKDataService = () => {
                     handleError(errorCode, params.user_id);
                     if (params.request_id.startsWith(USERS_GET_REQEST_ID)){
                         onUserSearchFailed(data);
-                    } else if (params.request_id.startsWith(GROUPS_GET_REQEST_ID)){
-                        onProgress(++friendsDataReceived * 100 / friendsCount);
+                    } else if (params.request_id.startsWith(GROUPS_GET_REQEST_ID) && !registerFriendResponse(data.request_id)){
+                        onProgress((friendsDataReceived + attemptsCountExceeded + ++friendsErrorResponse) * 100 / friendsCount);
                     };
                 };
                 break;
             default:
                 break;
         };
+        tryFinish();
     }
 
     const onTokenReceived = (data) => {
@@ -123,6 +128,7 @@ const createVKDataService = () => {
     };
 
     const onFriendsDataReceived = (data) => {
+        receivedFriendsResponse = true;
         let friends = data.response.items;
         friendsCount += friends.length;
         if (friendsCount === friends.length){
@@ -135,7 +141,7 @@ const createVKDataService = () => {
         }
 
         friends.forEach(friendId => {
-            friendsRequestsData.set(friendId, { request: null, response_received: false});
+            friendsRequestsData.set(friendId, { request: null, response_received: false, attemptsCount: 0});
             if (deletedOrClosedProfiles.indexOf(friendId) !== -1){
                 return;
             };
@@ -169,22 +175,18 @@ const createVKDataService = () => {
     }
 
     const onGroupsDataReceived = (data) => {
-        if (!!data.response.items){
-            data.response.items.forEach((g) => {
-                let key = g.id;
-                let obj = groupsData.get(key);
-                groupsData.set(key, {name:g.name, friends: (!!obj)? obj.friends + 1 : 1});
-            });
-        };
-        onProgress(++friendsDataReceived * 100 / friendsCount);
-        onUpdateItems(getTopData());
-        let userId = data?.request_id?.split(' ')[1].split(':')[1];
-        let reqData = friendsRequestsData.get(parseInt(userId));
-        reqData.response_received = true;
-        if (!statisticsShowPlanned && requestsQueued === requestsSent){
-            statisticsShowPlanned = true;
-            finish();
-        };
+        if (!registerFriendResponse(data.request_id)){
+            if (!!data.response.items){
+                data.response.items.forEach((g) => {
+                    let key = g.id;
+                    let obj = groupsData.get(key);
+                    groupsData.set(key, {name:g.name, friends: (!!obj)? obj.friends + 1 : 1});
+                });
+            };
+            onProgress((++friendsDataReceived + attemptsCountExceeded + friendsErrorResponse) * 100 / friendsCount);
+            onUpdateItems(getTopData());
+            log(`rS ${requestsSent}, rQ ${requestsQueued}, fC ${friendsCount}, fDR ${friendsDataReceived}, aCE ${attemptsCountExceeded}, fER ${friendsErrorResponse}`);
+        }
     };
 
     const log = (message) => {
@@ -215,15 +217,22 @@ const createVKDataService = () => {
                 bridge.send("VKWebAppCallAPIMethod", request);
                 requestsSent++;
                 let userId = parseInt(request.params.user_id);
-                friendsRequestsData.set(userId, { request: request, response_received: false, request_sent_time: Date.now()});
+                let reqInfo = friendsRequestsData.get(userId);
+                reqInfo.attemptsCount++;
+                reqInfo.request = request;
                 setTimeout(() => {
-                    let reqInfo = friendsRequestsData.get(userId);
                     if (!reqInfo.response_received){
-                        log(`response not received, userId ${userId}, repeat.`);
-                        log(reqInfo);
-                        callAPI(reqInfo.request.method, reqInfo.request.request_id, reqInfo.request.params);
+                        if (reqInfo.attemptsCount < REQUEST_ATTEMPTS_COUNT_MAX){
+                            log(`response not received, userId ${userId}, repeat.`);
+                            callAPI(reqInfo.request.method, reqInfo.request.request_id, reqInfo.request.params);
+                        }
+                        else{
+                            log(`Attempts exceeded requesting groups for user ${userId}.`);
+                            onProgress((friendsDataReceived + ++attemptsCountExceeded + friendsErrorResponse) * 100 / friendsCount);
+                            reqInfo.attemptsCountExceeded = true;
+                        };
                     }
-                }, timeout + 3000);
+                }, Math.max(scheduledTime_ms, Date.now() + 1000) - Date.now());
             }, timeout);
             log(`wait ${timeout} ms`);
             requestsQueued++;
@@ -238,7 +247,15 @@ const createVKDataService = () => {
         return `${method} user_id:${user_id} extended:${extended} api_ver:${API_VERSION} appId:${APP_ID} scope:${APP_SCOPE} count: ${count} offset: ${offset}`;
     }
     
-    // const getFromCache = (request_id) => {
+    const registerFriendResponse = (requestId) => {
+        let userId = requestId.split(' ')[1].split(':')[1];
+        let reqData = friendsRequestsData.get(parseInt(userId));
+        let val = reqData.response_received || reqData.attemptsCountExceeded;
+        reqData.response_received = true;
+        return val;
+    }
+
+        // const getFromCache = (request_id) => {
         // let fullKey = `${CACHE_PREFIX} ${request_id}`;
         // let dataCached = sessionStorage.getItem(fullKey);
         // if (!dataCached){
@@ -304,14 +321,23 @@ const createVKDataService = () => {
         return topData;
     }
     
-    function finish() {
-        // bridge.unsubscribe(listener);
-        log(`requestsSent = ${requestsSent}`);
-        log(`requestsQueued = ${requestsQueued}`);
-        log(`friendsCount = ${friendsCount}`);
-        log(`friendsDataReceived = ${friendsDataReceived}`);
-        let groupsDataArr = Array.from(groupsData.entries()).sort((a, b) => { return b[1].friends - a[1].friends; }).map((e) => { return {value:[e[0], e[1]] }});
-        onUpdateItems(groupsDataArr);
+    function tryFinish() {
+        if (!userSawResults 
+            && receivedFriendsResponse 
+            && ((friendsDataReceived + attemptsCountExceeded + friendsErrorResponse) === friendsCount) 
+            && requestsSent === requestsQueued){
+            userSawResults = true;
+            // bridge.unsubscribe(listener);
+            log(`requestsSent = ${requestsSent}`);
+            log(`requestsQueued = ${requestsQueued}`);
+            log(`friendsCount = ${friendsCount}`);
+            log(`friendsDataReceived = ${friendsDataReceived}`);
+            log(`attemptsCountExceeded = ${attemptsCountExceeded}`);
+            log(`friendsErrorResponse = ${friendsErrorResponse}`);
+            let groupsDataArr = Array.from(groupsData.entries()).sort((a, b) => { return b[1].friends - a[1].friends; }).map((e) => { return {value:[e[0], e[1]] }});
+            log(groupsDataArr.length);
+            onUpdateItems(groupsDataArr);
+        }
     }
 
     const getUserInfo = (userName) => { 
