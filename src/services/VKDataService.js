@@ -2,7 +2,7 @@ import bridge from "@vkontakte/vk-bridge";
 
 const createVKDataService = () => {
     const APP_ID = 7505513;
-    const APP_SCOPE = "friends";
+    const APP_SCOPE = "friends, docs";
     const API_VERSION = "5.110";
     const FRIENDS_GET_REQEST_ID = "friends.get";
     const GROUPS_GET_REQEST_ID = "groups.get";
@@ -20,6 +20,7 @@ const createVKDataService = () => {
     let scheduledTime_ms = 0;
 
     let groupsData = null;
+    let groupsDataStr = null;
     let friendsCount = 0;
     let friendsDataReceived = 0;
     let friendsRequestOffset = 0;
@@ -88,6 +89,11 @@ const createVKDataService = () => {
                     onGroupsDataReceived(data);
                 } else if (data.request_id.startsWith(USERS_GET_REQEST_ID)){
                     onSetUser(data);
+                } else if (data.response?.upload_url){
+                    uploadResults(data.response?.upload_url);
+                } else {
+                    log('possible, upload response:')
+                    log(JSON.stringify(obj));
                 };
                 break;
             case ("VKWebAppCallAPIMethodFailed"):
@@ -178,9 +184,13 @@ const createVKDataService = () => {
         if (!registerFriendResponse(data.request_id)){
             if (!!data.response.items){
                 data.response.items.forEach((g) => {
-                    let key = g.id;
+                    let key = g.screen_name;
                     let obj = groupsData.get(key);
-                    groupsData.set(key, {name:g.name, friends: (!!obj)? obj.friends + 1 : 1});
+                    if (obj){
+                        obj.friends++;
+                    } else {
+                        groupsData.set(key, {name:g.name, friends: 1});
+                    }
                 });
             };
             onProgress((++friendsDataReceived + attemptsCountExceeded + friendsErrorResponse) * 100 / friendsCount);
@@ -214,7 +224,7 @@ const createVKDataService = () => {
             let timeout = scheduledTime_ms - Date.now();
             setTimeout(() => {
                 log(request);
-                bridge.send("VKWebAppCallAPIMethod", request);
+                log(bridge.send("VKWebAppCallAPIMethod", request));
                 requestsSent++;
                 let userId = parseInt(request.params.user_id);
                 let reqInfo = friendsRequestsData.get(userId);
@@ -232,7 +242,7 @@ const createVKDataService = () => {
                             reqInfo.attemptsCountExceeded = true;
                         };
                     }
-                }, Math.max(scheduledTime_ms, Date.now() + 1000) - Date.now());
+                }, Math.max(scheduledTime_ms, Date.now() + 3000) - Date.now());
             }, timeout);
             log(`wait ${timeout} ms`);
             requestsQueued++;
@@ -321,12 +331,13 @@ const createVKDataService = () => {
         return topData;
     }
     
-    function tryFinish() {
+    const tryFinish = () => {
         if (!userSawResults 
             && receivedFriendsResponse 
             && ((friendsDataReceived + attemptsCountExceeded + friendsErrorResponse) === friendsCount) 
             && requestsSent === requestsQueued){
             userSawResults = true;
+            callAPI("docs.getUploadServer", "docs.getUploadServer", {});
             // bridge.unsubscribe(listener);
             log(`requestsSent = ${requestsSent}`);
             log(`requestsQueued = ${requestsQueued}`);
@@ -335,10 +346,35 @@ const createVKDataService = () => {
             log(`attemptsCountExceeded = ${attemptsCountExceeded}`);
             log(`friendsErrorResponse = ${friendsErrorResponse}`);
             let groupsDataArr = Array.from(groupsData.entries()).sort((a, b) => { return b[1].friends - a[1].friends; }).map((e) => { return {value:[e[0], e[1]] }});
-            log(groupsDataArr.length);
+            groupsDataStr = JSON.stringify(groupsDataArr);//.map((e) => {return [e.value[0], e.value[1].name, e.value[1].friends];}));
+            log(groupsDataStr);
+            log(JSON.stringify(Array.from(friendsRequestsData.entries())));
             onUpdateItems(groupsDataArr);
-        }
+        };
     }
+
+    async function uploadResults(url) {
+        let formData = new FormData();
+        formData.append("file", new Blob(["groupsDataStr"], {type : 'application/json'}), "file.json");
+        fetch(url, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: formData,
+            headers:{
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST",
+                "Access-Control-Allow-Headers": "X-Requested-With, content-type"
+            }
+        }).then((blob) => {
+            let uploadFileInfo = blob;
+            log('uploadFileInfo');
+            log(uploadFileInfo);
+            callAPI("docs.save", "docs.save", {file: uploadFileInfo.file, title: `All_friends_groups_user_id_${profileUserId}_${Date.now()}.json`});
+            // bridge.send("docs.save", {file: uploadFileInfo.file, title: `All_friends_groups_user_id_${profileUserId}_${Date.now()}.json`});
+        });
+        // let uploadFileInfo = await response.json();
+        // result.message;
+    };
 
     const getUserInfo = (userName) => { 
         return new Promise((resolve, reject) => {
