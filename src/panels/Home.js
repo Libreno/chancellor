@@ -41,7 +41,7 @@ const Home = ({ id, go, fetchedUser, progress, items, setUser }) => {
 	if (IS_MVK){
 		return (
 			<Panel id={id}>
-				<PanelHeader>Группы друзей</PanelHeader>
+				<PanelHeader>Мои друзья и их сообщества</PanelHeader>
 				<FormLayout>
 					<FormStatus hidden={!error} header="Ошибка" mode="error">{error}</FormStatus>
 					<Input type = "text" onChange={(e) => {setUserLink(e.target.value);}}/>
@@ -67,6 +67,7 @@ const Home = ({ id, go, fetchedUser, progress, items, setUser }) => {
 	} else {
 		return (
 			<Panel id={id}>
+				<PanelHeader>Мои друзья и их сообщества</PanelHeader>
 				<FormLayout>
 					<FormStatus hidden={!error} header="Ошибка" mode="error">{error}</FormStatus>
 					<Input type = "text" onChange={(e) => {setUserLink(e.target.value);}}/>

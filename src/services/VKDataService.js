@@ -89,11 +89,12 @@ const createVKDataService = () => {
                     onGroupsDataReceived(data);
                 } else if (data.request_id.startsWith(USERS_GET_REQEST_ID)){
                     onSetUser(data);
-                } else if (data.response?.upload_url){
-                    uploadResults(data.response?.upload_url);
-                } else {
-                    log('possible, upload response:')
-                    log(JSON.stringify(obj));
+                // Save results
+                // } else if (data.response?.upload_url){
+                //     uploadResults(data.response?.upload_url);
+                // } else {
+                //     log('possible, upload response:')
+                //     log(JSON.stringify(obj));
                 };
                 break;
             case ("VKWebAppCallAPIMethodFailed"):
@@ -337,7 +338,7 @@ const createVKDataService = () => {
             && ((friendsDataReceived + attemptsCountExceeded + friendsErrorResponse) === friendsCount) 
             && requestsSent === requestsQueued){
             userSawResults = true;
-            callAPI("docs.getUploadServer", "docs.getUploadServer", {});
+            // callAPI("docs.getUploadServer", "docs.getUploadServer", {});
             // bridge.unsubscribe(listener);
             log(`requestsSent = ${requestsSent}`);
             log(`requestsQueued = ${requestsQueued}`);
