@@ -296,15 +296,14 @@ const createVKDataService = () => {
         while (i++ < groupsData.size){
             let newEl = entr.next();
             if (topData[TOP_DATA_MAX_NUM] === undefined || topData[TOP_DATA_MAX_NUM].value[1].friends < newEl.value[1].friends){
+                // log(JSON.stringify(newEl));
                 if (topDataKeys.has(newEl.value[0])){
                     for(let j = 0; j <= TOP_DATA_MAX_NUM; j++)
                     {
                         if (topData[j].value[0] === newEl.value[0]){
-                            if (topData[j].value[1].friends === newEl.value[1].friends){
-                                break;
+                            if (topData[j].value[1].friends !== newEl.value[1].friends){
+                                topData[j].value[1].friends = newEl.value[1].friends;
                             };
-                            topData[j].value[1].friends = newEl.value[1].friends;
-                            topData.sort((a, b) => { if (b === undefined){ return -1;}; if (a === undefined){ return 1;}; return b.value[1].friends - a.value[1].friends; });
                             break;
                         };
                     };
@@ -327,6 +326,7 @@ const createVKDataService = () => {
                         topDataKeys.delete(tmp.value[0]);
                     };
                 };
+                topData.sort((a, b) => { if (b === undefined){ return -1;}; if (a === undefined){ return 1;}; return b.value[1].friends - a.value[1].friends; });
             };
         };
         return topData;
