@@ -8,7 +8,6 @@ const createVKDataService = () => {
     const GROUPS_GET_REQEST_ID = "groups.get";
     const USERS_GET_REQEST_ID = "users.get";
     const FRIENDS_MAX_COUNT_PER_REQUEST = 5000;
-    const TOP_DATA_MAX_NUM = 9;
     const REQUEST_ATTEMPTS_COUNT_MAX = 3;
 
     let profileUserId = 0;
@@ -18,6 +17,7 @@ const createVKDataService = () => {
     let onSetUser = null;
     let onUserSearchFailed = null;
     let scheduledTime_ms = 0;
+    let updateHasMore = null;
 
     let groupsData = null;
     let groupsDataStr = null;
@@ -29,7 +29,7 @@ const createVKDataService = () => {
     let deletedOrClosedProfiles = [];
     let attemptsCountExceeded = 0;
     let friendsErrorResponse = 0;
-
+    
     // let SKIP_PROFILES_IDS_KEY = '';
     // let GROUPS_DATA_KEY = '';
 
@@ -41,15 +41,19 @@ const createVKDataService = () => {
     let topData = [];
     let topDataKeys = new Set();
     let friendsRequestsData = new Map();
+    let topDataCount = 0;
 
     // const CACHE_PREFIX = "AllFriends"
 
     // limit 3 requests per second for method 'groups.get'
     const API_GROUPS_GET_REQUEST_INTERVAL = 350;
 
-    const getGroupsData = (userId, setProgress, setItems) => { 
+    const getGroupsData = (userId, setProgress, setItems, setHasMore, topCount) => { 
         onProgress = setProgress;
         onUpdateItems = setItems;
+        updateHasMore = setHasMore;
+        topDataCount = topCount;
+
         groupsData = new Map();
 
         profileUserId = userId;
@@ -122,7 +126,8 @@ const createVKDataService = () => {
 
     const onTokenReceived = (data) => {
         token = data.access_token;
-        callAPI("friends.get", FRIENDS_GET_REQEST_ID, { user_id: profileUserId, count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: friendsRequestOffset });
+        let params = { user_id: profileUserId, count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: friendsRequestOffset };
+        callAPI("friends.get", `${FRIENDS_GET_REQEST_ID} ${profileUserId} ${friendsRequestOffset}`, params);
 
         // let requestId = getRequestId(FRIENDS_GET_REQEST_ID, profileUserId, undefined, FRIENDS_MAX_COUNT_PER_REQUEST, friendsRequestOffset);
         // let dataCached = getFromCache(requestId);
@@ -135,15 +140,24 @@ const createVKDataService = () => {
     };
 
     const onFriendsDataReceived = (data) => {
+        if (friendsRequestsData.get(data.request_id)){
+            return;
+        };
+        friendsRequestsData.set(data.request_id, {response_received: true});
+
         receivedFriendsResponse = true;
         let friends = data.response.items;
         friendsCount += friends.length;
         if (friendsCount === friends.length){
             let requestedFriendsCount = friendsCount;
             while (requestedFriendsCount < data.response.count){
-                friendsRequestOffset += FRIENDS_MAX_COUNT_PER_REQUEST;
+                friendsRequestOffset += FRIENDS_MAX_COUNT_PER_REQUEST;                
                 requestedFriendsCount += FRIENDS_MAX_COUNT_PER_REQUEST;
-                callAPI("friends.get", FRIENDS_GET_REQEST_ID, profileUserId === undefined? {} : { user_id: profileUserId, count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: friendsRequestOffset });
+                let params = {count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: friendsRequestOffset};
+                if (profileUserId !== undefined){
+                    params.user_id = profileUserId;
+                };
+                callAPI("friends.get", `${FRIENDS_GET_REQEST_ID} ${profileUserId} ${friendsRequestOffset}`, params);
             }
         }
 
@@ -195,7 +209,9 @@ const createVKDataService = () => {
                 });
             };
             onProgress((++friendsDataReceived + attemptsCountExceeded + friendsErrorResponse) * 100 / friendsCount);
-            onUpdateItems(getTopData());
+            updateTopData();
+            onUpdateItems(topData);
+            updateHasMore(groupsData.size > topData.length);
             log(`rS ${requestsSent}, rQ ${requestsQueued}, fC ${friendsCount}, fDR ${friendsDataReceived}, aCE ${attemptsCountExceeded}, fER ${friendsErrorResponse}`);
         }
     };
@@ -290,15 +306,16 @@ const createVKDataService = () => {
         // };
     // };
 
-    const getTopData = () => {
+    const updateTopData = () => {
         let entr = groupsData.entries();
         let i = 0;
+        let topDataMaxNum = topDataCount - 1;
         while (i++ < groupsData.size){
             let newEl = entr.next();
-            if (topData[TOP_DATA_MAX_NUM] === undefined || topData[TOP_DATA_MAX_NUM].value[1].friends < newEl.value[1].friends){
+            if (topData[topDataMaxNum] === undefined || topData[topDataMaxNum].value[1].friends < newEl.value[1].friends){
                 // log(JSON.stringify(newEl));
                 if (topDataKeys.has(newEl.value[0])){
-                    for(let j = 0; j <= TOP_DATA_MAX_NUM; j++)
+                    for(let j = 0; j <= topDataMaxNum; j++)
                     {
                         if (topData[j].value[0] === newEl.value[0]){
                             if (topData[j].value[1].friends !== newEl.value[1].friends){
@@ -310,7 +327,7 @@ const createVKDataService = () => {
                 } else {
                     topDataKeys.add(newEl.value[0]);
                     let tmp = null;
-                    for(let j = 0; j <= TOP_DATA_MAX_NUM; j++){
+                    for(let j = 0; j <= topDataMaxNum; j++){
                         if (topData[j] === undefined){
                             topData[j] = newEl;
                             break;
@@ -350,6 +367,7 @@ const createVKDataService = () => {
             groupsDataStr = JSON.stringify(groupsDataArr);//.map((e) => {return [e.value[0], e.value[1].name, e.value[1].friends];}));
             log(groupsDataStr);
             log(JSON.stringify(Array.from(friendsRequestsData.entries())));
+            updateHasMore(false);
             onUpdateItems(groupsDataArr);
         };
     }

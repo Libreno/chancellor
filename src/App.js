@@ -13,9 +13,11 @@ const App = () => {
 	const [popout, setPopout] = useState(<ScreenSpinner size='large' />);
 	const [progress, setProgress] = useState(0);
 	const [items, setItems] = useState([]);
+	const [topCount, setTopCount] = useState(10);
+	const [topHasMore, setHasMore] = useState(false);
 
 	const start = (w) => {
-		VKDataService.GetGroupsData(fetchedUser.id, setProgress, setItems);
+		VKDataService.GetGroupsData(fetchedUser.id, setProgress, setItems, setHasMore, topCount);
 	};
 
 	useEffect(() => {
@@ -29,20 +31,15 @@ const App = () => {
 		async function fetchData() {
 			const user = await VKDataService.GetCurrentUserInfo();
 			setUser(user);
-			// start();
-			VKDataService.GetGroupsData(user.id, setProgress, setItems);
+			VKDataService.GetGroupsData(user.id, setProgress, setItems, setHasMore, topCount);
 			setPopout(null);
 		}
 		fetchData();
-	}, []);
-
-	const go = e => {
-		setActivePanel(e.currentTarget.dataset.to);
-	};
+	}, [topCount]);
 
 	return (
 		<View activePanel={activePanel} popout={popout}>
-			<Home id='home' fetchedUser={fetchedUser} go={go} progress={progress} items={items} setUser={(user) => {setUser(user); start();}} />
+			<Home id='home' fetchedUser={fetchedUser} progress={progress} items={items} setUser={(user) => {setUser(user); start();}} setTopCount = {setTopCount} hasMore = {topHasMore}/>
 		</View>
 	);
 }
