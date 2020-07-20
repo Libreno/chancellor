@@ -12,9 +12,9 @@ const createVKDataService = () => {
 
     let profileUserId = 0;
     let token = null;
-    let onProgress = null;
-    let onUpdateItems = null;
-    let onSetUser = null;
+    let updateProgress = null;
+    let updateItems = null;
+    let setUser = null;
     let onUserSearchFailed = null;
     let scheduledTime_ms = 0;
     let updateHasMore = null;
@@ -38,23 +38,29 @@ const createVKDataService = () => {
 
     let userSawResults = false;
 
-    let topData = [];
-    let topDataKeys = new Set();
-    let friendsRequestsData = new Map();
+    let topData = null;
+    let topDataKeys;
+    let friendsRequestsData = null;
     let topDataCount = 0;
+
+    let timers = [];
 
     // const CACHE_PREFIX = "AllFriends"
 
     // limit 3 requests per second for method 'groups.get'
     const API_GROUPS_GET_REQUEST_INTERVAL = 350;
 
-    const getGroupsData = (userId, setProgress, setItems, setHasMore, topCount) => { 
-        onProgress = setProgress;
-        onUpdateItems = setItems;
+    const getGroupsData = (userId, setProgress, setItems, setHasMore, topCount, groupsDataMap, friendsRequestsDataMap, topDataKeysSet, topDataArr) => { 
+        reset();
+
+        updateProgress = setProgress;
+        updateItems = setItems;
         updateHasMore = setHasMore;
         topDataCount = topCount;
-
-        groupsData = new Map();
+        groupsData = groupsDataMap;
+        friendsRequestsData = friendsRequestsDataMap;
+        topDataKeys = topDataKeysSet;
+        topData = topDataArr;
 
         profileUserId = userId;
         // SKIP_PROFILES_IDS_KEY = `${profileUserId} deletedOrClosedProfiles`
@@ -67,6 +73,7 @@ const createVKDataService = () => {
 
         // deletedOrClosedProfiles = getFromCache(SKIP_PROFILES_IDS_KEY) ?? deletedOrClosedProfiles;
 
+        
         bridge.subscribe(listener);
         if (!token){
             bridge.send("VKWebAppGetAuthToken", {app_id: APP_ID, scope: APP_SCOPE});
@@ -76,9 +83,46 @@ const createVKDataService = () => {
         }
     };
 
+    const reset = () => {
+        friendsCount = 0;
+        scheduledTime_ms = 0;
+    
+        groupsData = null;
+        groupsDataStr = null;
+        friendsCount = 0;
+        friendsDataReceived = 0;
+        friendsRequestOffset = 0;
+        receivedFriendsResponse = false;
+    
+        deletedOrClosedProfiles = [];
+        attemptsCountExceeded = 0;
+        friendsErrorResponse = 0;
+        
+        requestsQueued = 0;
+        requestsSent = 0;
+    
+        userSawResults = false;
+    
+        topData = null;
+        topDataKeys = null;
+        friendsRequestsData = null;
+        topDataCount = 0;
+
+        timers.forEach((t) => {
+            clearTimeout(t);
+        });
+        timers = [];
+    }
+
     const listener = (obj) => {
         log(obj);
         let { detail: { type, data }} = obj;
+        let requestIdObj = JSON.parse(data.request_id);
+        if (!!requestIdObj.profileUserId && Number(requestIdObj.profileUserId) !== Number(profileUserId)){
+            log(`response for profile ${requestIdObj.profileUserId} skipped, current profile ${profileUserId}.`);
+            return;
+        };
+
         switch (type){
             case ("VKWebAppAccessTokenReceived"):
                 onTokenReceived(data);
@@ -87,19 +131,13 @@ const createVKDataService = () => {
                 // if (!getFromCache(data.request_id)){
                 //     saveToCache(data, data.request_id);
                 // };
-                if (data.request_id.startsWith(FRIENDS_GET_REQEST_ID)){
-                    onFriendsDataReceived(data);
-                } else if (data.request_id.startsWith(GROUPS_GET_REQEST_ID)){
-                    onGroupsDataReceived(data);
-                } else if (data.request_id.startsWith(USERS_GET_REQEST_ID)){
-                    onSetUser(data);
+                handleAPIResult(data);
                 // Save results
                 // } else if (data.response?.upload_url){
                 //     uploadResults(data.response?.upload_url);
                 // } else {
                 //     log('possible, upload response:')
                 //     log(JSON.stringify(obj));
-                };
                 break;
             case ("VKWebAppCallAPIMethodFailed"):
                 let params = data.error_data.error_reason.request_params.reduce((o, cv) => {o[cv.key] = cv.value; return o;}, {});
@@ -114,20 +152,27 @@ const createVKDataService = () => {
                     if (params.request_id.startsWith(USERS_GET_REQEST_ID)){
                         onUserSearchFailed(data);
                     } else if (params.request_id.startsWith(GROUPS_GET_REQEST_ID) && !registerFriendResponse(data.request_id)){
-                        onProgress((friendsDataReceived + attemptsCountExceeded + ++friendsErrorResponse) * 100 / friendsCount);
+                        updateProgress((friendsDataReceived + attemptsCountExceeded + ++friendsErrorResponse) * 100 / friendsCount);
                     };
                 };
                 break;
+            case ("VKWebAppGetUserInfoResult"):
+                setUser(data);
+                break;
             default:
+                log(`Error: wrong type ` + type);
                 break;
         };
         tryFinish();
     }
 
     const onTokenReceived = (data) => {
+        if (token){
+            return;
+        };
         token = data.access_token;
         let params = { user_id: profileUserId, count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: friendsRequestOffset };
-        callAPI("friends.get", `${FRIENDS_GET_REQEST_ID} ${profileUserId} ${friendsRequestOffset}`, params);
+        callAPI("friends.get", getRequestId(FRIENDS_GET_REQEST_ID, null, null, friendsRequestOffset), params);
 
         // let requestId = getRequestId(FRIENDS_GET_REQEST_ID, profileUserId, undefined, FRIENDS_MAX_COUNT_PER_REQUEST, friendsRequestOffset);
         // let dataCached = getFromCache(requestId);
@@ -138,11 +183,30 @@ const createVKDataService = () => {
             // callAPI("friends.get", requestId, profileUserId === undefined? {} : { "user_id": profileUserId, "count": FRIENDS_MAX_COUNT_PER_REQUEST, "offset": friendsRequestOffset });
         // }
     };
+    
+    const handleAPIResult = (data) => {
+        let requestIdObj = JSON.parse(data.request_id);
+        switch (requestIdObj.method) {
+            case (FRIENDS_GET_REQEST_ID):
+                onFriendsDataReceived(data);
+                break;
+            case (GROUPS_GET_REQEST_ID):
+                onGroupsDataReceived(data);
+                break;
+            case (USERS_GET_REQEST_ID):
+                setUser(data);
+                break;
+            default:
+                log(`Error: wrong request id ` + data.request_id);
+                break;
+        };
+    }
 
     const onFriendsDataReceived = (data) => {
         if (friendsRequestsData.get(data.request_id)){
             return;
         };
+        log('friendsRequestsData set ' + data.request_id)
         friendsRequestsData.set(data.request_id, {response_received: true});
 
         receivedFriendsResponse = true;
@@ -157,22 +221,22 @@ const createVKDataService = () => {
                 if (profileUserId !== undefined){
                     params.user_id = profileUserId;
                 };
-                callAPI("friends.get", `${FRIENDS_GET_REQEST_ID} ${profileUserId} ${friendsRequestOffset}`, params);
+                callAPI("friends.get", getRequestId(FRIENDS_GET_REQEST_ID, null, null, friendsRequestOffset), params);
             }
         }
 
         friends.forEach(friendId => {
+            log('friendsRequestsData set ' + friendId)
             friendsRequestsData.set(friendId, { request: null, response_received: false, attemptsCount: 0});
             if (deletedOrClosedProfiles.indexOf(friendId) !== -1){
                 return;
             };
-            let requestId = getRequestId(GROUPS_GET_REQEST_ID, friendId, 1);
             // let dataCached = getFromCache(requestId);
             // if (!!dataCached){
             //     onGroupsDataReceived(dataCached);
             // }
             // else {
-                callAPI("groups.get", requestId, { user_id:  friendId, extended: 1});
+                callAPI("groups.get", getRequestId(GROUPS_GET_REQEST_ID, friendId, 1), { user_id:  friendId, extended: 1});
             // }
         });
     };
@@ -208,9 +272,9 @@ const createVKDataService = () => {
                     }
                 });
             };
-            onProgress((++friendsDataReceived + attemptsCountExceeded + friendsErrorResponse) * 100 / friendsCount);
+            updateProgress((++friendsDataReceived + attemptsCountExceeded + friendsErrorResponse) * 100 / friendsCount);
             updateTopData();
-            onUpdateItems(topData);
+            updateItems(topData);
             updateHasMore(groupsData.size > topData.length);
             log(`rS ${requestsSent}, rQ ${requestsQueued}, fC ${friendsCount}, fDR ${friendsDataReceived}, aCE ${attemptsCountExceeded}, fER ${friendsErrorResponse}`);
         }
@@ -239,15 +303,15 @@ const createVKDataService = () => {
         if (requestId.startsWith(GROUPS_GET_REQEST_ID)){
             scheduledTime_ms = Math.max(scheduledTime_ms + API_GROUPS_GET_REQUEST_INTERVAL, Date.now());
             let timeout = scheduledTime_ms - Date.now();
-            setTimeout(() => {
+            timers.push(setTimeout(() => {
                 log(request);
-                log(bridge.send("VKWebAppCallAPIMethod", request));
+                bridge.send("VKWebAppCallAPIMethod", request);
                 requestsSent++;
                 let userId = parseInt(request.params.user_id);
                 let reqInfo = friendsRequestsData.get(userId);
                 reqInfo.attemptsCount++;
                 reqInfo.request = request;
-                setTimeout(() => {
+                timers.push(setTimeout(() => {
                     if (!reqInfo.response_received){
                         if (reqInfo.attemptsCount < REQUEST_ATTEMPTS_COUNT_MAX){
                             log(`response not received, userId ${userId}, repeat.`);
@@ -255,12 +319,12 @@ const createVKDataService = () => {
                         }
                         else{
                             log(`Attempts exceeded requesting groups for user ${userId}.`);
-                            onProgress((friendsDataReceived + ++attemptsCountExceeded + friendsErrorResponse) * 100 / friendsCount);
+                            updateProgress((friendsDataReceived + ++attemptsCountExceeded + friendsErrorResponse) * 100 / friendsCount);
                             reqInfo.attemptsCountExceeded = true;
                         };
                     }
-                }, Math.max(scheduledTime_ms, Date.now() + 3000) - Date.now());
-            }, timeout);
+                }, Math.max(scheduledTime_ms, Date.now() + 3000) - Date.now()));
+            }, timeout));
             log(`wait ${timeout} ms`);
             requestsQueued++;
         }
@@ -270,14 +334,19 @@ const createVKDataService = () => {
         }
     };
 
-    const getRequestId = (method, user_id, extended, count, offset) => {
-        return `${method} user_id:${user_id} extended:${extended} api_ver:${API_VERSION} appId:${APP_ID} scope:${APP_SCOPE} count: ${count} offset: ${offset}`;
+    const getRequestId = (method, user_id, extended, offset) => {
+        return `{"method":"${method}", "profileUserId":"${profileUserId}", "user_id":"${user_id? user_id : profileUserId}", "extended":"${extended}", "offset":"${offset}"}`;
     }
     
     const registerFriendResponse = (requestId) => {
-        let userId = requestId.split(' ')[1].split(':')[1];
-        let reqData = friendsRequestsData.get(parseInt(userId));
-        let val = reqData.response_received || reqData.attemptsCountExceeded;
+        let requestIdObj = JSON.parse(requestId);
+        let reqData = friendsRequestsData.get(parseInt(requestIdObj.user_id));
+        if (!reqData){
+            log('reqData ' + requestId);
+            log('requestIdObj.user_id ' + requestIdObj.user_id);
+            log(JSON.stringify(Array.from(friendsRequestsData.entries())));
+        }
+        let val = reqData?.response_received || reqData?.attemptsCountExceeded;
         reqData.response_received = true;
         return val;
     }
@@ -368,7 +437,7 @@ const createVKDataService = () => {
             log(groupsDataStr);
             log(JSON.stringify(Array.from(friendsRequestsData.entries())));
             updateHasMore(false);
-            onUpdateItems(groupsDataArr);
+            updateItems(groupsDataArr);
         };
     }
 
@@ -397,8 +466,8 @@ const createVKDataService = () => {
 
     const getUserInfo = (userName) => { 
         return new Promise((resolve, reject) => {
-            callAPI("users.get", USERS_GET_REQEST_ID, { user_ids: userName, fields: "photo_200, city, nickname"});
-            onSetUser = resolve;
+            callAPI("users.get", getRequestId(USERS_GET_REQEST_ID), { user_ids: userName, fields: "photo_200, city, nickname"});
+            setUser = resolve;
             onUserSearchFailed = reject;
         });
     };

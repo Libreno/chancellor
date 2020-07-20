@@ -14,15 +14,15 @@ import { List } from '@vkontakte/vkui';
 import VKDataService from "../services/VKDataService";
 import InfiniteScroll from 'react-infinite-scroll-component';
 
-const Home = ({ id, fetchedUser, progress, items, setUser, setTopCount, hasMore }) => {
-	const getUserInfo = () => {
+const Home = ({ id, fetchedUser, progress, items, loadUser, incTopCount, hasMore }) => {
+	const loadUserClick = () => {
 		if (userLink === ""){
 			return;
 		};
 		let segments = userLink.split('/');
 		let userName = segments[segments.length - 1];
 		VKDataService.GetUserInfo(userName).then((userData) => {
-			setUser(userData.response[0]);
+			loadUser(userData.response[0]);
 		}).catch((errorResponse) => {
 			setError(errorResponse.error_data.error_reason.error_msg);
 		});
@@ -31,22 +31,13 @@ const Home = ({ id, fetchedUser, progress, items, setUser, setTopCount, hasMore 
 	const [error, setError] = useState(null);
 	const [userLink, setUserLink] = useState('');
 
-	const pageSize = 10;
-	const [pageCount, setPageCount] = useState(1);
-
-	const fetchMoreData = () => {
-		let itemsToShowCount = (pageCount + 1) * pageSize;
-		setTopCount(itemsToShowCount);
-		setPageCount(pageCount + 1);
-	};
-
 	return (
 		<Panel id={id}>
 			<PanelHeader>Мои друзья и их сообщества</PanelHeader>
 			<FormLayout>
 				<FormStatus hidden={!error} header="Ошибка" mode="error">{error}</FormStatus>
 				<Input type = "text" onChange={(e) => {setUserLink(e.target.value);}}/>
-				<Button stretched size = "xl" onClick={getUserInfo}>Загрузить</Button>
+				<Button stretched size = "xl" onClick={loadUserClick}>Загрузить</Button>
 				{fetchedUser &&
 				<Group>
 					<Cell
@@ -63,7 +54,7 @@ const Home = ({ id, fetchedUser, progress, items, setUser, setTopCount, hasMore 
 				<List>
 					<InfiniteScroll
 						dataLength={items.length}
-						next={fetchMoreData}
+						next={incTopCount}
 						hasMore={hasMore}
 						loader={<h4>Loading...</h4>}
 						>

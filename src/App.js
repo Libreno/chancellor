@@ -13,11 +13,16 @@ const App = () => {
 	const [popout, setPopout] = useState(<ScreenSpinner size='large' />);
 	const [progress, setProgress] = useState(0);
 	const [items, setItems] = useState([]);
-	const [topCount, setTopCount] = useState(10);
+	const pageSize = 10;
+	const [topCount, setTopCount] = useState(pageSize);
 	const [topHasMore, setHasMore] = useState(false);
+	const [groupsDataMap, setGroupsDataMap] = useState(new Map());
+	const [friendsRequestsDataMap, setFriendsRequestsDataMap] = useState(new Map());
+	const [topDataKeysSet, setTopDataKeysSet] = useState(new Set());
+	const [topDataArr, setTopDataArr] = useState([]);
 
-	const start = (w) => {
-		VKDataService.GetGroupsData(fetchedUser.id, setProgress, setItems, setHasMore, topCount);
+	const start = (userId) => {
+		VKDataService.GetGroupsData(userId, setProgress, setItems, setHasMore, topCount, groupsDataMap, friendsRequestsDataMap, topDataKeysSet, topDataArr);
 	};
 
 	useEffect(() => {
@@ -28,21 +33,29 @@ const App = () => {
 				document.body.attributes.setNamedItem(schemeAttribute);
 			}
 		});
-		async function fetchData() {
-			const user = await VKDataService.GetCurrentUserInfo();
+		VKDataService.GetCurrentUserInfo().then((user) => {
 			setUser(user);
-			VKDataService.GetGroupsData(user.id, setProgress, setItems, setHasMore, topCount);
+			start(user.id);
 			setPopout(null);
-		}
-		fetchData();
-	}, [topCount]);
+			});
+	}, [topCount, topDataArr, topDataKeysSet, groupsDataMap, friendsRequestsDataMap]);
 
 	return (
 		<View activePanel={activePanel} popout={popout}>
-			<Home id='home' fetchedUser={fetchedUser} progress={progress} items={items} setUser={(user) => {setUser(user); start();}} setTopCount = {setTopCount} hasMore = {topHasMore}/>
+			<Home id='home' 
+				fetchedUser={fetchedUser} 
+				progress={progress} 
+				items={items} 
+				loadUser={(user) => {
+					setUser(user); 
+					setGroupsDataMap(new Map());
+					start();}} 
+				incTopCount = {() => {
+					setTopCount(Number(topCount) + Number(pageSize))
+				}} 
+				hasMore = {topHasMore}/>
 		</View>
 	);
 }
 
 export default App;
-
