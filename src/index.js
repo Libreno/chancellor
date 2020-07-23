@@ -3,10 +3,10 @@ import "core-js/features/set";
 import React from "react";
 import ReactDOM from "react-dom";
 import App from "./App";
-import VKDataService from "./services/VKDataService"
+import bridge from "@vkontakte/vk-bridge";
 
 // Init VK  Mini App
-VKDataService.Init();
+bridge.send("VKWebAppInit");
 
 ReactDOM.render(<App />, document.getElementById("root"));
 if (process.env.NODE_ENV === "development") {

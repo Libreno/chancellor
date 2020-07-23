@@ -1,385 +1,238 @@
 import bridge from "@vkontakte/vk-bridge";
 
+const APP_ID = 7505513;
+const APP_SCOPE = "friends, docs";
+const API_VERSION = "5.110";
+const FRIENDS_GET_REQEST_ID = "friends.get";
+const GROUPS_GET_REQEST_ID = "groups.get";
+const USERS_GET_REQEST_ID = "users.get";
+const FRIENDS_MAX_COUNT_PER_REQUEST = 5000;
+const REQUEST_ATTEMPTS_COUNT_MAX = 3;
+const API_GROUPS_GET_REQUEST_INTERVAL = 350;
+
 const createVKDataService = () => {
-    const APP_ID = 7505513;
-    const APP_SCOPE = "friends, docs";
-    const API_VERSION = "5.110";
-    const FRIENDS_GET_REQEST_ID = "friends.get";
-    const GROUPS_GET_REQEST_ID = "groups.get";
-    const USERS_GET_REQEST_ID = "users.get";
-    const FRIENDS_MAX_COUNT_PER_REQUEST = 5000;
-    const REQUEST_ATTEMPTS_COUNT_MAX = 3;
+    function loadGroupsData(props) {
+        bridge.subscribe((obj) => {listener(props, obj)});
 
-    let profileUserId = 0;
-    let token = null;
-    let updateProgress = null;
-    let updateItems = null;
-    let setUser = null;
-    let onUserSearchFailed = null;
-    let scheduledTime_ms = 0;
-    let updateHasMore = null;
-
-    let groupsData = null;
-    let groupsDataStr = null;
-    let friendsCount = 0;
-    let friendsDataReceived = 0;
-    let friendsRequestOffset = 0;
-    let receivedFriendsResponse = false;
-
-    let deletedOrClosedProfiles = [];
-    let attemptsCountExceeded = 0;
-    let friendsErrorResponse = 0;
-    
-    // let SKIP_PROFILES_IDS_KEY = '';
-    // let GROUPS_DATA_KEY = '';
-
-    let requestsQueued = 0;
-    let requestsSent = 0;
-
-    let userSawResults = false;
-
-    let topData = null;
-    let topDataKeys;
-    let friendsRequestsData = null;
-    let topDataCount = 0;
-
-    let timers = [];
-
-    // const CACHE_PREFIX = "AllFriends"
-
-    // limit 3 requests per second for method 'groups.get'
-    const API_GROUPS_GET_REQUEST_INTERVAL = 350;
-
-    const getGroupsData = (userId, setProgress, setItems, setHasMore, topCount, groupsDataMap, friendsRequestsDataMap, topDataKeysSet, topDataArr) => { 
-        reset();
-
-        updateProgress = setProgress;
-        updateItems = setItems;
-        updateHasMore = setHasMore;
-        topDataCount = topCount;
-        groupsData = groupsDataMap;
-        friendsRequestsData = friendsRequestsDataMap;
-        topDataKeys = topDataKeysSet;
-        topData = topDataArr;
-
-        profileUserId = userId;
-        // SKIP_PROFILES_IDS_KEY = `${profileUserId} deletedOrClosedProfiles`
-        // GROUPS_DATA_KEY = `${profileUserId} groupsData`;
-
-        // let val = getFromCache(GROUPS_DATA_KEY);
-        // if (!!val){
-        //     return;
-        // };
-
-        // deletedOrClosedProfiles = getFromCache(SKIP_PROFILES_IDS_KEY) ?? deletedOrClosedProfiles;
-
-        
-        bridge.subscribe(listener);
-        if (!token){
+        if (!props.token){
             bridge.send("VKWebAppGetAuthToken", {app_id: APP_ID, scope: APP_SCOPE});
         }
         else {
-            onTokenReceived({access_token: token});
+            loadFriendsFirstRequest({access_token: props.token});
         }
     };
 
-    const reset = () => {
-        friendsCount = 0;
-        scheduledTime_ms = 0;
-    
-        groupsData = null;
-        groupsDataStr = null;
-        friendsCount = 0;
-        friendsDataReceived = 0;
-        friendsRequestOffset = 0;
-        receivedFriendsResponse = false;
-    
-        deletedOrClosedProfiles = [];
-        attemptsCountExceeded = 0;
-        friendsErrorResponse = 0;
-        
-        requestsQueued = 0;
-        requestsSent = 0;
-    
-        userSawResults = false;
-    
-        topData = null;
-        topDataKeys = null;
-        friendsRequestsData = null;
-        topDataCount = 0;
-
-        timers.forEach((t) => {
-            clearTimeout(t);
-        });
-        timers = [];
-    }
-
-    const listener = (obj) => {
-        log(obj);
+    function listener(props, obj) {
+        props.log(obj);
         let { detail: { type, data }} = obj;
-        let requestIdObj = JSON.parse(data.request_id);
-        if (!!requestIdObj.profileUserId && Number(requestIdObj.profileUserId) !== Number(profileUserId)){
-            log(`response for profile ${requestIdObj.profileUserId} skipped, current profile ${profileUserId}.`);
-            return;
+        if (data.request_id){
+            let requestIdObj = JSON.parse(data.request_id);
+            if (!!requestIdObj.profileUserId && Number(requestIdObj.profileUserId) !== Number(props.fetchedUser.id)){
+                props.log(`response for profile ${requestIdObj.profileUserId} skipped, current profile ${props.fetchedUser.id}.`);
+                return;
+            };
         };
 
         switch (type){
             case ("VKWebAppAccessTokenReceived"):
-                onTokenReceived(data);
+                props.setToken(data.access_token);
+                loadFriendsFirstRequest(props);
                 break;
             case ("VKWebAppCallAPIMethodResult"):
-                // if (!getFromCache(data.request_id)){
-                //     saveToCache(data, data.request_id);
-                // };
-                handleAPIResult(data);
-                // Save results
-                // } else if (data.response?.upload_url){
-                //     uploadResults(data.response?.upload_url);
-                // } else {
-                //     log('possible, upload response:')
-                //     log(JSON.stringify(obj));
+                handleAPIResult(props, data);
                 break;
             case ("VKWebAppCallAPIMethodFailed"):
                 let params = data.error_data.error_reason.request_params.reduce((o, cv) => {o[cv.key] = cv.value; return o;}, {});
                 let errorCode = data.error_data.error_reason.error_code;
                 if (errorCode === 6){
                     // In case of error: too many requests per second - reschedule the request
-                    log('repeat request')
-                    callAPI(params.method, params.request_id, params);
+                    props.log('repeat request')
+                    callAPI(props, params.method, params.request_id, params);
                 }
                 else {
-                    handleError(errorCode, params.user_id);
-                    if (params.request_id.startsWith(USERS_GET_REQEST_ID)){
-                        onUserSearchFailed(data);
-                    } else if (params.request_id.startsWith(GROUPS_GET_REQEST_ID) && !registerFriendResponse(data.request_id)){
-                        updateProgress((friendsDataReceived + attemptsCountExceeded + ++friendsErrorResponse) * 100 / friendsCount);
+                    let requestIdObj = JSON.parse(params.request_id);
+                    handleError(props, errorCode, params.user_id);
+                    if (requestIdObj.method === USERS_GET_REQEST_ID){
+                        props.onUserSearchFailed(data);
+                    } else if (requestIdObj.method === GROUPS_GET_REQEST_ID && !registerFriendResponse(props, data.request_id)){
+                            props.incCounter('friendsErrorResponse');
                     };
                 };
                 break;
             case ("VKWebAppGetUserInfoResult"):
-                setUser(data);
+                props.setUser(data);
+                props.cleanState();
+                loadFriendsFirstRequest(props);
+                props.log("VKWebAppGetUserInfoResult");
                 break;
             default:
-                log(`Error: wrong type ` + type);
+                props.log(`Warning: unhandledresponse type ` + type);
                 break;
         };
-        tryFinish();
+        tryFinish(props);
     }
 
-    const onTokenReceived = (data) => {
-        if (token){
-            return;
-        };
-        token = data.access_token;
-        let params = { user_id: profileUserId, count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: friendsRequestOffset };
-        callAPI("friends.get", getRequestId(FRIENDS_GET_REQEST_ID, null, null, friendsRequestOffset), params);
-
-        // let requestId = getRequestId(FRIENDS_GET_REQEST_ID, profileUserId, undefined, FRIENDS_MAX_COUNT_PER_REQUEST, friendsRequestOffset);
-        // let dataCached = getFromCache(requestId);
-        // if (!!dataCached){
-        //     onFriendsDataReceived(dataCached);
-        // } 
-        // else {
-            // callAPI("friends.get", requestId, profileUserId === undefined? {} : { "user_id": profileUserId, "count": FRIENDS_MAX_COUNT_PER_REQUEST, "offset": friendsRequestOffset });
-        // }
+    const loadFriendsFirstRequest = (props) => {
+        let params = { user_id: props.fetchedUser.id, count: FRIENDS_MAX_COUNT_PER_REQUEST };
+        callAPI(props, "friends.get", getRequestId(FRIENDS_GET_REQEST_ID), params);
     };
     
-    const handleAPIResult = (data) => {
+    const handleAPIResult = (props, data) => {
         let requestIdObj = JSON.parse(data.request_id);
         switch (requestIdObj.method) {
             case (FRIENDS_GET_REQEST_ID):
-                onFriendsDataReceived(data);
+                onFriendsDataReceived(props, data);
                 break;
             case (GROUPS_GET_REQEST_ID):
-                onGroupsDataReceived(data);
+                onGroupsDataReceived(props, data);
                 break;
             case (USERS_GET_REQEST_ID):
-                setUser(data);
+                props.setUser(data);
                 break;
             default:
-                log(`Error: wrong request id ` + data.request_id);
+                props.log(`Error: wrong request id ` + data.request_id);
                 break;
         };
     }
 
-    const onFriendsDataReceived = (data) => {
-        if (friendsRequestsData.get(data.request_id)){
+    const onFriendsDataReceived = (props, data) => {
+        if (props.friendsRequestsData.get(data.request_id)){
             return;
         };
-        log('friendsRequestsData set ' + data.request_id)
-        friendsRequestsData.set(data.request_id, {response_received: true});
+        props.log('friendsRequestsData set ' + data.request_id)
+        props.friendsRequestsData.set(data.request_id, {response_received: true});
 
-        receivedFriendsResponse = true;
         let friends = data.response.items;
-        friendsCount += friends.length;
-        if (friendsCount === friends.length){
-            let requestedFriendsCount = friendsCount;
-            while (requestedFriendsCount < data.response.count){
-                friendsRequestOffset += FRIENDS_MAX_COUNT_PER_REQUEST;                
-                requestedFriendsCount += FRIENDS_MAX_COUNT_PER_REQUEST;
-                let params = {count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: friendsRequestOffset};
-                if (profileUserId !== undefined){
-                    params.user_id = profileUserId;
-                };
-                callAPI("friends.get", getRequestId(FRIENDS_GET_REQEST_ID, null, null, friendsRequestOffset), params);
-            }
+        props.incCounter('friendsCount', friends.length);
+        let friendsRequestOffset = 0;
+        while (friendsRequestOffset + FRIENDS_MAX_COUNT_PER_REQUEST < data.response.count){
+            friendsRequestOffset += FRIENDS_MAX_COUNT_PER_REQUEST;
+            let params = {count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: friendsRequestOffset};
+            if (props.fetchedUser?.id !== undefined){
+                params.user_id = props.fetchedUser.id;
+            };
+            callAPI("friends.get", getRequestId(FRIENDS_GET_REQEST_ID, null, null, friendsRequestOffset), params);
         }
 
         friends.forEach(friendId => {
-            log('friendsRequestsData set ' + friendId)
-            friendsRequestsData.set(friendId, { request: null, response_received: false, attemptsCount: 0});
-            if (deletedOrClosedProfiles.indexOf(friendId) !== -1){
-                return;
-            };
-            // let dataCached = getFromCache(requestId);
-            // if (!!dataCached){
-            //     onGroupsDataReceived(dataCached);
-            // }
-            // else {
-                callAPI("groups.get", getRequestId(GROUPS_GET_REQEST_ID, friendId, 1), { user_id:  friendId, extended: 1});
-            // }
+            props.log('friendsRequestsData set ' + friendId)
+            props.friendsRequestsData.set(friendId, { request: null, response_received: false, attemptsCount: 0});
+            // if (deletedOrClosedProfiles.indexOf(friendId) !== -1){
+            //     return;
+            // };
+            callAPI("groups.get", getRequestId(GROUPS_GET_REQEST_ID, friendId, 1), { user_id:  friendId, extended: 1});
         });
     };
 
-    const handleError = (errorCode, userId) => {
+    const handleError = (props, errorCode, userId) => {
         switch(errorCode){
             case 30:
             case 7:
             case 18:
-                log(`Info: private or deleted profile or groups are hidden by user ${userId}`);
-                deletedOrClosedProfiles.push(userId);
+                props.log(`Info: private or deleted profile or groups are hidden by user ${userId}`);
+                // deletedOrClosedProfiles.push(userId);
                 break;
             case 29:
                 // from friends.get
-                log("Error: rate limit reached, please, wait for one hour before calling api method again.")
+                props.log("Error: rate limit reached, please, wait for one hour before calling api method again.")
                 break;
             default:
-                log('Error: unknown error');
+                props.log('Error: unknown error');
                 break;
         }
     }
 
-    const onGroupsDataReceived = (data) => {
-        if (!registerFriendResponse(data.request_id)){
+    const onGroupsDataReceived = (props, data) => {
+        if (!registerFriendResponse(props, data.request_id)){
             if (!!data.response.items){
                 data.response.items.forEach((g) => {
                     let key = g.screen_name;
-                    let obj = groupsData.get(key);
+                    let obj = props.groupsData.get(key);
                     if (obj){
                         obj.friends++;
                     } else {
-                        groupsData.set(key, {name:g.name, friends: 1});
+                        props.groupsData.set(key, {name:g.name, friends: 1});
                     }
                 });
             };
-            updateProgress((++friendsDataReceived + attemptsCountExceeded + friendsErrorResponse) * 100 / friendsCount);
-            updateTopData();
-            updateItems(topData);
-            updateHasMore(groupsData.size > topData.length);
-            log(`rS ${requestsSent}, rQ ${requestsQueued}, fC ${friendsCount}, fDR ${friendsDataReceived}, aCE ${attemptsCountExceeded}, fER ${friendsErrorResponse}`);
+            props.incCounter('friendsDataReceived');
+            updateTopData(props);
+            props.updateItems(props.topData);
+            props.setTopData({ hasMore: props.groupsData.size > props.topData.length });
         }
     };
-
-    const log = (message) => {
-        var today = new Date();
-        var time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds() + ":" + today.getMilliseconds();
-        if (typeof message === 'object'){
-            console.log(`${time} =>`);
-            console.log(message);
-        } else {
-            console.log(`${time} => ${message}`);
-        }
-    };
-
-    const callAPI = (method, requestId, params) => { 
+    
+    const callAPI = (props, method, requestId, params) => { 
         let request = {
             method: method, 
             request_id: requestId, 
             params: params
         };
         params["v"] = API_VERSION;
-        params["access_token"] = token;
+        params["access_token"] = props.token;
 
-        if (requestId.startsWith(GROUPS_GET_REQEST_ID)){
+        // limit 3 requests per second for method 'groups.get'
+        if (method === GROUPS_GET_REQEST_ID){
+            let scheduledTime_ms = props.schedule.scheduledTime_ms;
+            let timers = props.schedule.timers;
             scheduledTime_ms = Math.max(scheduledTime_ms + API_GROUPS_GET_REQUEST_INTERVAL, Date.now());
             let timeout = scheduledTime_ms - Date.now();
             timers.push(setTimeout(() => {
-                log(request);
+                props.log(request);
                 bridge.send("VKWebAppCallAPIMethod", request);
-                requestsSent++;
+                props.incCounter('requestsSent');
                 let userId = parseInt(request.params.user_id);
-                let reqInfo = friendsRequestsData.get(userId);
+                let reqInfo = props.friendsRequestsData.get(userId);
                 reqInfo.attemptsCount++;
                 reqInfo.request = request;
                 timers.push(setTimeout(() => {
                     if (!reqInfo.response_received){
                         if (reqInfo.attemptsCount < REQUEST_ATTEMPTS_COUNT_MAX){
-                            log(`response not received, userId ${userId}, repeat.`);
+                            props.log(`response not received, userId ${userId}, repeat.`);
                             callAPI(reqInfo.request.method, reqInfo.request.request_id, reqInfo.request.params);
                         }
                         else{
-                            log(`Attempts exceeded requesting groups for user ${userId}.`);
-                            updateProgress((friendsDataReceived + ++attemptsCountExceeded + friendsErrorResponse) * 100 / friendsCount);
+                            props.log(`Attempts exceeded requesting groups for user ${userId}.`);
+                            props.incCounter('attemptsCountExceeded');
+                            // updateProgress((friendsDataReceived + ++attemptsCountExceeded + friendsErrorResponse) * 100 / friendsCount);
                             reqInfo.attemptsCountExceeded = true;
                         };
                     }
                 }, Math.max(scheduledTime_ms, Date.now() + 3000) - Date.now()));
             }, timeout));
-            log(`wait ${timeout} ms`);
-            requestsQueued++;
+            props.log(`wait ${timeout} ms`);
+            props.incCounter('requestsQueued');
         }
         else{
-            log(request);
+            props.log(request);
             bridge.send("VKWebAppCallAPIMethod", request);
         }
     };
 
-    const getRequestId = (method, user_id, extended, offset) => {
-        return `{"method":"${method}", "profileUserId":"${profileUserId}", "user_id":"${user_id? user_id : profileUserId}", "extended":"${extended}", "offset":"${offset}"}`;
+    const getRequestId = (props, method, user_id, extended, offset) => {
+        return `{"method":"${method}", "profileUserId":"${props.fetchedUser.id}", "user_id":"${user_id? user_id : props.fetchedUser?.id}", "extended":"${extended}", "offset":"${offset}"}`;
     }
     
-    const registerFriendResponse = (requestId) => {
+    const registerFriendResponse = (props, requestId) => {
         let requestIdObj = JSON.parse(requestId);
-        let reqData = friendsRequestsData.get(parseInt(requestIdObj.user_id));
+        let reqData = props.friendsRequestsData.get(parseInt(requestIdObj.user_id));
         if (!reqData){
-            log('reqData ' + requestId);
-            log('requestIdObj.user_id ' + requestIdObj.user_id);
-            log(JSON.stringify(Array.from(friendsRequestsData.entries())));
+            props.log('reqData ' + requestId);
+            props.log('requestIdObj.user_id ' + requestIdObj.user_id);
+            props.log(JSON.stringify(Array.from(props.friendsRequestsData.entries())));
         }
         let val = reqData?.response_received || reqData?.attemptsCountExceeded;
         reqData.response_received = true;
         return val;
     }
 
-        // const getFromCache = (request_id) => {
-        // let fullKey = `${CACHE_PREFIX} ${request_id}`;
-        // let dataCached = sessionStorage.getItem(fullKey);
-        // if (!dataCached){
-        //     return;
-        // };
-        // log(`Data loaded from sessionStorage with key '${fullKey}'.`)
-        // let dataParsed = JSON.parse(dataCached);
-        // log(dataParsed);
-        // return dataParsed;
-    // }
-
-    // const saveToCache = (groupsDataArr, request_id) => {
-        // try {
-        //     let strData = JSON.stringify(groupsDataArr);
-        //     log(`Trying to save string with ${strData.length} chars in sessionStorage.`);
-        //     sessionStorage.setItem(`${CACHE_PREFIX} ${request_id}`, strData);
-        //     log(`Data saved successfully!`);
-        // }
-        // catch (e) {
-        //     log(e);
-        // };
-    // };
-
-    const updateTopData = () => {
-        let entr = groupsData.entries();
+    const updateTopData = (props) => {
+        let entr = props.groupsData.entries();
         let i = 0;
-        let topDataMaxNum = topDataCount - 1;
-        while (i++ < groupsData.size){
+        let topData = props.topData.arr;
+        let topDataMaxNum = props.topData.count - 1;
+        let topDataKeys = props.topData.keys;
+        while (i++ < props.groupsData.size){
             let newEl = entr.next();
             if (topData[topDataMaxNum] === undefined || topData[topDataMaxNum].value[1].friends < newEl.value[1].friends){
                 // log(JSON.stringify(newEl));
@@ -418,30 +271,28 @@ const createVKDataService = () => {
         return topData;
     }
     
-    const tryFinish = () => {
-        if (!userSawResults 
-            && receivedFriendsResponse 
-            && ((friendsDataReceived + attemptsCountExceeded + friendsErrorResponse) === friendsCount) 
-            && requestsSent === requestsQueued){
-            userSawResults = true;
+    const tryFinish = (props) => {
+        if (props.readyToFinish()){
+            props.incCounter('userSawResults');
             // callAPI("docs.getUploadServer", "docs.getUploadServer", {});
             // bridge.unsubscribe(listener);
-            log(`requestsSent = ${requestsSent}`);
-            log(`requestsQueued = ${requestsQueued}`);
-            log(`friendsCount = ${friendsCount}`);
-            log(`friendsDataReceived = ${friendsDataReceived}`);
-            log(`attemptsCountExceeded = ${attemptsCountExceeded}`);
-            log(`friendsErrorResponse = ${friendsErrorResponse}`);
-            let groupsDataArr = Array.from(groupsData.entries()).sort((a, b) => { return b[1].friends - a[1].friends; }).map((e) => { return {value:[e[0], e[1]] }});
-            groupsDataStr = JSON.stringify(groupsDataArr);//.map((e) => {return [e.value[0], e.value[1].name, e.value[1].friends];}));
-            log(groupsDataStr);
-            log(JSON.stringify(Array.from(friendsRequestsData.entries())));
-            updateHasMore(false);
-            updateItems(groupsDataArr);
+            // log(`requestsSent = ${counters.requestsSent}`);
+            // log(`requestsQueued = ${counters.requestsQueued}`);
+            // log(`friendsCount = ${counters.friendsCount}`);
+            // log(`friendsDataReceived = ${counters.friendsDataReceived}`);
+            // log(`attemptsCountExceeded = ${counters.attemptsCountExceeded}`);
+            // log(`friendsErrorResponse = ${counters.friendsErrorResponse}`);
+            let groupsDataArr = Array.from(props.groupsData.entries()).sort((a, b) => { return b[1].friends - a[1].friends; }).map((e) => { return {value:[e[0], e[1]] }});
+            window.groupsDataArr = groupsDataArr;
+            // groupsDataStr = JSON.stringify(groupsDataArr);//.map((e) => {return [e.value[0], e.value[1].name, e.value[1].friends];}));
+            // log(groupsDataStr);
+            // log(JSON.stringify(Array.from(friendsRequestsData.entries())));
+            props.setTopData({ hasMore: false });
+            props.setItems(groupsDataArr);
         };
     }
 
-    async function uploadResults(url) {
+    async function uploadResults(props, url) {
         let formData = new FormData();
         formData.append("file", new Blob(["groupsDataStr"], {type : 'application/json'}), "file.json");
         fetch(url, {
@@ -455,28 +306,35 @@ const createVKDataService = () => {
             }
         }).then((blob) => {
             let uploadFileInfo = blob;
-            log('uploadFileInfo');
-            log(uploadFileInfo);
-            callAPI("docs.save", "docs.save", {file: uploadFileInfo.file, title: `All_friends_groups_user_id_${profileUserId}_${Date.now()}.json`});
+            props.log('uploadFileInfo');
+            props.log(uploadFileInfo);
+            callAPI("docs.save", "docs.save", {file: uploadFileInfo.file, title: `All_friends_groups_user_id_${props.fetchedUser?.id}_${Date.now()}.json`});
             // bridge.send("docs.save", {file: uploadFileInfo.file, title: `All_friends_groups_user_id_${profileUserId}_${Date.now()}.json`});
         });
         // let uploadFileInfo = await response.json();
         // result.message;
     };
 
-    const getUserInfo = (userName) => { 
-        return new Promise((resolve, reject) => {
-            callAPI("users.get", getRequestId(USERS_GET_REQEST_ID), { user_ids: userName, fields: "photo_200, city, nickname"});
-            setUser = resolve;
-            onUserSearchFailed = reject;
-        });
+    // const incCounters = (newCounters) => {
+    //     updateCounters(Object.assign({}, counters, newCounters));
+        //     {
+        //     requestsQueued        : newCounters.requestsQueued         ? newCounters.requestsQueued        : counters.requestsQueued,
+        //     requestsSent          : newCounters.requestsSent           ? newCounters.requestsSent          : counters.requestsSent,
+        //     friendsDataReceived   : newCounters.friendsDataReceived    ? newCounters.friendsDataReceived   : counters.friendsDataReceived,
+        //     attemptsCountExceeded : newCounters.attemptsCountExceeded  ? newCounters.attemptsCountExceeded : counters.attemptsCountExceeded,
+        //     friendsErrorResponse  : newCounters.friendsErrorResponse   ? newCounters.friendsErrorResponse  : counters.friendsErrorResponse,
+        //     friendsCount          : newCounters.friendsCount           ? newCounters.friendsCount          : counters.friendsCount
+        // });
+    // }
+
+    function changeProfile(userName){
+        callAPI("users.get", getRequestId(USERS_GET_REQEST_ID), { user_ids: userName, fields: "photo_200, city, nickname"});
     };
 
     return {
-        Init: () => {return bridge.send("VKWebAppInit")},
         GetCurrentUserInfo: () => { return bridge.send('VKWebAppGetUserInfo')},
-        GetUserInfo: getUserInfo,
-        GetGroupsData: getGroupsData,
+        LoadGroupsData: loadGroupsData,
+        ChangeProfile: changeProfile
     }
 }
 

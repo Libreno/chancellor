@@ -14,21 +14,17 @@ import { List } from '@vkontakte/vkui';
 import VKDataService from "../services/VKDataService";
 import InfiniteScroll from 'react-infinite-scroll-component';
 
-const Home = ({ id, fetchedUser, progress, items, loadUser, incTopCount, hasMore }) => {
+// rename to GroupsDataComponent
+const Home = ({ id, fetchedUser, counters, items, loadUser, incTopCount, hasMore, error }) => {
 	const loadUserClick = () => {
 		if (userLink === ""){
 			return;
 		};
 		let segments = userLink.split('/');
 		let userName = segments[segments.length - 1];
-		VKDataService.GetUserInfo(userName).then((userData) => {
-			loadUser(userData.response[0]);
-		}).catch((errorResponse) => {
-			setError(errorResponse.error_data.error_reason.error_msg);
-		});
+		VKDataService.ChangeProfile(userName);
 	};
 
-	const [error, setError] = useState(null);
 	const [userLink, setUserLink] = useState('');
 
 	return (
@@ -48,7 +44,7 @@ const Home = ({ id, fetchedUser, progress, items, loadUser, incTopCount, hasMore
 				</Group>}
 			</FormLayout>
 
-			<Progress value={progress} />
+			<Progress value={(counters.friendsDataReceived + counters.attemptsCountExceeded + counters.friendsErrorResponse) * 100 / counters.friendsCount} />
 
 			<Group>
 				<List>
