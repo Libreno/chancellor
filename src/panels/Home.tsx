@@ -11,24 +11,24 @@ import FormLayout from '@vkontakte/vkui/dist/components/FormLayout/FormLayout';
 import FormStatus from '@vkontakte/vkui/dist/components/FormStatus/FormStatus';
 import Avatar from '@vkontakte/vkui/dist/components/Avatar/Avatar';
 import { List } from '@vkontakte/vkui';
-import VKDataService from "../services/VKDataService";
 import InfiniteScroll from 'react-infinite-scroll-component';
 
 // rename to GroupsDataComponent
-const Home = ({ id, fetchedUser, counters, items, loadUser, incTopCount, hasMore, error }) => {
+const Home = ({ id, fetchedUser, vkDataService, counters, items, incTopCount, hasMore, error }: any) => {
 	const loadUserClick = () => {
 		if (userLink === ""){
 			return;
 		};
 		let segments = userLink.split('/');
 		let userName = segments[segments.length - 1];
-		VKDataService.ChangeProfile(userName);
+		vkDataService.ChangeProfile(userName);
 	};
 
 	const [userLink, setUserLink] = useState('');
 
 	return (
 		<Panel id={id}>
+			{/* <div>{JSON.stringify(items)}</div> */}
 			<PanelHeader>Мои друзья и их сообщества</PanelHeader>
 			<FormLayout>
 				<FormStatus hidden={!error} header="Ошибка" mode="error">{error}</FormStatus>
@@ -54,23 +54,25 @@ const Home = ({ id, fetchedUser, counters, items, loadUser, incTopCount, hasMore
 						hasMore={hasMore}
 						loader={<h4>Loading...</h4>}
 						>
-						{items.map((item) => <Cell key={item.value[0]} indicator={item.value[0]}>[{item.value[1].friends}] {item.value[1].name}</Cell>)}
+						{items.map((item: any) => <Cell key={item.value[0]} indicator={item.value[0]}>[{item.value[1].friends}] {item.value[1].name}</Cell>)}
 					</InfiniteScroll>
 				</List>
 			</Group>
-		</Panel>)
+		</Panel>
+		)
 };
 
-Home.propTypes = {
-	id: PropTypes.string.isRequired,
-	fetchedUser: PropTypes.shape({
-		photo_200: PropTypes.string,
-		first_name: PropTypes.string,
-		last_name: PropTypes.string,
-		city: PropTypes.shape({
-			title: PropTypes.string,
-		}),
-	}),
-};
+// Home.propTypes = {
+// 	id: PropTypes.string.isRequired,
+// 	vkDataService: PropTypes.any,
+// 	fetchedUser: PropTypes.shape({
+// 		photo_200: PropTypes.string,
+// 		first_name: PropTypes.string,
+// 		last_name: PropTypes.string,
+// 		city: PropTypes.shape({
+// 			title: PropTypes.string,
+// 		}),
+// 	}),
+// };
 
 export default Home;
