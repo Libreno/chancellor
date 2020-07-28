@@ -1,0 +1,18 @@
+#allfriends-groups-list .allfriends-vk-group-card{
+    margin: 0 0px 12px 12px;
+}
+
+#allfriends-groups-list .allfriends-vk-group-card .group-name{
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#allfriends-groups-list .allfriends-vk-group-card .group-id{
+    color: darkgray;
+    padding-top: 5px;
+}
+
+#allfriends-start-screen .paragraph{
+    margin: 12px;
+}

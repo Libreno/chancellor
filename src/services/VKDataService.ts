@@ -10,57 +10,59 @@ const USERS_GET_REQEST_ID = "users.get";
 const FRIENDS_MAX_COUNT_PER_REQUEST = 5000;
 const REQUEST_ATTEMPTS_COUNT_MAX = 9;
 const API_GROUPS_GET_REQUEST_INTERVAL = 350;
+const KNOWN_ERRORS = [30, 7, 18, 29]
 
 const createVKDataService = () => {
-    const loadFriendsGroupsData = (props: any) => {
-        let params = { user_id: props.fetchedUser.id, count: FRIENDS_MAX_COUNT_PER_REQUEST }
-        callAPI(props, "friends.get", getRequestId(props.fetchedUser?.id, FRIENDS_GET_REQEST_ID, null), params)
-            .then((resp) => {
-                return onFriendsDataReceived(props, resp.response)
-            })
-            .catch(e => props.onError(e))
-            .then((getFriendsPromises) => {
-                Promise.all(getFriendsPromises).then((friendsDataArr) => {
-                    return friendsDataArr.map((friends: any) => {
-                        return friends.items.map((friendId: number) => {
-                            return new Promise((resolve) => {
-                                const tryGetFriendsData = (retryNum: number) => {
-                                    const cancelToken = {};
-                                    callAPIGetGroups(props, friendId, cancelToken).then((groupsResp) => {
-                                        onGroupsDataReceived(props, groupsResp)
-                                        resolve({succeed:true})
-                                        props.schedule.timers.push(cancelToken)
-                                        // props.setSchedule({ timers: props.schedule.timers })
-                                        // log('succeed friendId: ' + friendId)
-                                    }).catch((e) => {
-                                        // If 10 times failed with "too many requests" error, then stop trying, perhaps there is a new problem.
-                                        // log('error friendId: ' + friendId + ' ' + e.error_data.error_reason.error_msg)
-                                        if (e.error_data.error_reason.error_code !== 6){
-                                            props.incCounter('friendsErrorResponse')                                            
-                                            resolve({ succeed: false, friendId: friendId, error: e.error_data.error_reason.error_msg})                                            
-                                            return
-                                        }
-                                        if (retryNum >= REQUEST_ATTEMPTS_COUNT_MAX){
-                                            props.incCounter('attemptsCountExceeded')
-                                            resolve({ succeed: false, friendId: friendId, error: e.error_data.error_reason.error_msg})                                            
-                                            return
-                                        }
-                                        // log('Retry ' + (retryNum + 1))
-                                        tryGetFriendsData(retryNum + 1)
-                                    })
-                                }
-                                return tryGetFriendsData(0)
+    const loadFriendsGroupsData = (props: any): Promise<Array<any>> => {
+        return new Promise((resolve, reject) => {
+            let params = { user_id: props.fetchedUser.id, count: FRIENDS_MAX_COUNT_PER_REQUEST }
+            callAPI(props, "friends.get", getRequestId(props.fetchedUser?.id, FRIENDS_GET_REQEST_ID, null), params)
+                .then((resp) => {
+                    return onFriendsDataReceived(props, resp.response)
+                })
+                .catch(e => reject(e))
+                .then((getFriendsPromises: any) => {
+                    Promise.all(getFriendsPromises).then((friendsDataArr) => {
+                        return friendsDataArr.map((friends: any) => {
+                            return friends.items.map((friendId: number) => {
+                                return new Promise((resolve) => {
+                                    const tryGetFriendsData = (retryNum: number) => {
+                                        const cancelToken = {};
+                                        callAPIGetGroups(props, friendId, cancelToken).then((groupsResp) => {
+                                            onGroupsDataReceived(props, groupsResp)
+                                            resolve({succeed:true})
+                                            props.schedule.timers.push(cancelToken)
+                                        }).catch((e) => {
+                                            const errCode = e?.error_data?.error_reason?.error_code
+                                            // Error code 6 - "too many requests per second"
+                                            if (errCode !== 6){
+                                                if (!KNOWN_ERRORS.findIndex((v) => { return v === errCode })){
+                                                    log(e) 
+                                                }
+                                                props.incCounter('friendsErrorResponse')                                            
+                                                resolve({ succeed: false, friendId: friendId, error: e.error_data.error_reason.error_msg})                                            
+                                                return
+                                            }
+                                            // If 10 times failed with "too many requests" error, then stop trying, perhaps there is a new problem.
+                                            if (retryNum >= REQUEST_ATTEMPTS_COUNT_MAX){
+                                                props.incCounter('attemptsCountExceeded')
+                                                resolve({ succeed: false, friendId: friendId, error: e.error_data.error_reason.error_msg})                                            
+                                                return
+                                            }
+                                            tryGetFriendsData(retryNum + 1)
+                                        })
+                                    }
+                                    return tryGetFriendsData(0)
+                                })
                             })
                         })
                     })
-                })
-                .then((groupsPromises: any[]) => {
-                    Promise.all(groupsPromises.flat()).then(results => {
-                        // log('failed users:')
-                        // log(results.filter((res: any) => !res.succeed).map((res: any) => 'userId: ' + res.friendId + ', error: ' + res.error))
-                        // let groupsDataArr = Array.from(props.groupsData.entries()).sort((a: any, b: any) => { return b[1].friends - a[1].friends; }).map((e: any) => { return {value:[e[0], e[1]] }});
-                        // props.setGroupsData(props.groupsData);
-                        props.refreshView(refreshCount++)
+                    .then((groupsPromises: any[]) => {
+                        Promise.all(groupsPromises.flat()).then(_ => {
+                            // log('failed users:')
+                            // log(results.filter((res: any) => !res.succeed).map((res: any) => 'userId: ' + res.friendId + ', error: ' + res.error))
+                            resolve(_)
+                        })
                     })
                 })
             })
@@ -81,22 +83,23 @@ const createVKDataService = () => {
         res.push(Promise.resolve(response))
         return res;        
     };
-    let refreshCount = 0;
-    const onGroupsDataReceived = (props: any, data: any) => {
-        if (!!data.response.items){
-            data.response.items.forEach((g: any) => {
+
+    const onGroupsDataReceived = (props: any, responseData: any) => {
+        if (!!responseData.response.items){
+            responseData.response.items.forEach((g: any) => {
                 let key = g.screen_name;
-                let obj = props.groupsData.get(key);
+                let obj = props.groupsData.get(key)
                 if (obj){
-                    obj.friends++;
+                    obj.friends++
                 } else {
-                    props.groupsData.set(key, {name:g.name, friends: 1});
+                    props.groupsData.set(key, {name:g.name, friends: 1})
                 }
             });
         };
         props.incCounter('friendsDataReceived')
-        // props.setGroupsData(props.groupsData)
-        props.refreshView(refreshCount++)
+        const {data, hasMore} = getUpdatedTopData(props.groupsData, props.topDataArr)
+        props.setItems(data)
+        props.setTopDataHasMore(hasMore)
     };
     
     const callAPI = (props: any, method: string, requestId: string, params: any) => { 
@@ -108,7 +111,7 @@ const createVKDataService = () => {
         params["v"] = API_VERSION
         params["access_token"] = props.token
 
-        log(request)
+        // log(request)
         return bridge.send("VKWebAppCallAPIMethod", request)
     }
 
@@ -126,8 +129,6 @@ const createVKDataService = () => {
             }}
 
             // limit 3 requests per second for method 'groups.get'
-            // log('scheduledTime_ms')
-            // log(scheduledTime_ms)
             scheduledTime_ms = Math.max(scheduledTime_ms + API_GROUPS_GET_REQUEST_INTERVAL, Date.now())
             let timeout = scheduledTime_ms - Date.now()
             const timeoutId = setTimeout(() => {
@@ -153,9 +154,11 @@ const createVKDataService = () => {
         callAPI(props, "users.get", getRequestId(props.fetchedUser?.id, USERS_GET_REQEST_ID), { user_ids: userName, fields: "photo_200, city, nickname"});
     };
 
-    const getUpdatedTopData = (groupsData: Map<any, any>, topDataArr: any[], topDataMaxNum: number, topDataKeys: Set<any>): any[] => {
+    const topDataKeys = new Set()
+    const getUpdatedTopData = (groupsData: Map<any, any>, topDataArr: Array<any>): any => {
         let i = 0
-		const ent = groupsData.entries()
+        const ent = groupsData.entries()
+        const topDataMaxNum = topDataArr.length - 1;
         while (i++ < groupsData.size){
             let newEl = ent.next()
             if (topDataArr[topDataMaxNum] === undefined || topDataArr[topDataMaxNum].value[1].friends < newEl.value[1].friends){
@@ -191,7 +194,7 @@ const createVKDataService = () => {
                 topDataArr.sort((a: any, b: any) => { if (b === undefined){ return -1;}; if (a === undefined){ return 1;}; return b.value[1].friends - a.value[1].friends; })
             };
         };
-        return topDataArr
+        return {data: topDataArr.slice(), hasMore: groupsData.size > topDataMaxNum + 1}
     }
 
     return {

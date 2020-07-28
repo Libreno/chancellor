@@ -1,5 +1,4 @@
 import React, {useState} from 'react';
-import PropTypes from 'prop-types';
 import Panel from '@vkontakte/vkui/dist/components/Panel/Panel';
 import PanelHeader from '@vkontakte/vkui/dist/components/PanelHeader/PanelHeader';
 import Progress from "@vkontakte/vkui/dist/components/Progress/Progress";
@@ -12,23 +11,32 @@ import FormStatus from '@vkontakte/vkui/dist/components/FormStatus/FormStatus';
 import Avatar from '@vkontakte/vkui/dist/components/Avatar/Avatar';
 import { List } from '@vkontakte/vkui';
 import InfiniteScroll from 'react-infinite-scroll-component';
+import log from '../logger'
+import '../styles/style.css'
 
 // rename to GroupsDataComponent
-const Home = ({ id, fetchedUser, vkDataService, counters, items, incTopCount, hasMore, error }: any) => {
+const DataScreen = ({ id, fetchedUser, vkDataService, counters, items, incTopCount, hasMore, error }: any) => {
 	const loadUserClick = () => {
 		if (userLink === ""){
-			return;
+			return
 		};
-		let segments = userLink.split('/');
-		let userName = segments[segments.length - 1];
-		vkDataService.ChangeProfile(userName);
+		let segments = userLink.split('/')
+		let userName = segments[segments.length - 1]
+		vkDataService.ChangeProfile(userName)
 	};
 
-	const [userLink, setUserLink] = useState('');
+	const [userLink, setUserLink] = useState('')
+	const [showAll, setShowAll] = useState(false)
+
+	const buttonMoreStyle = {
+		display:showAll||!hasMore? 'none': 'block'
+	}
+
+	// log('DataScreen items.length ' + items.length)
+	// log('DataScreen hasMore ' + hasMore)
 
 	return (
 		<Panel id={id}>
-			{/* <div>{JSON.stringify(items)}</div> */}
 			<PanelHeader>Мои друзья и их сообщества</PanelHeader>
 			<FormLayout>
 				<FormStatus hidden={!error} header="Ошибка" mode="error">{error}</FormStatus>
@@ -46,7 +54,7 @@ const Home = ({ id, fetchedUser, vkDataService, counters, items, incTopCount, ha
 
 			<Progress value={(counters.friendsDataReceived + counters.attemptsCountExceeded + counters.friendsErrorResponse) * 100 / counters.friendsCount} />
 
-			<Group>
+			<Group id='allfriends-groups-list'>
 				<List>
 					<InfiniteScroll
 						dataLength={items.length}
@@ -54,25 +62,18 @@ const Home = ({ id, fetchedUser, vkDataService, counters, items, incTopCount, ha
 						hasMore={hasMore}
 						loader={<h4>Loading...</h4>}
 						>
-						{items.map((item: any) => <Cell key={item.value[0]} indicator={item.value[0]}>[{item.value[1].friends}] {item.value[1].name}</Cell>)}
+						{items.map((item: any, i: number) => {
+							return <div className='allfriends-vk-group-card' key={i}>
+										<div className='group-name'>[{item.value[1].friends}]&nbsp;{item.value[1].name}</div>
+										<div className='group-id'>{item.value[0]}</div>
+									</div>
+						})}
 					</InfiniteScroll>
 				</List>
+				<Button style={buttonMoreStyle} className="more-button" stretched size = "xl" onClick={() =>{ setShowAll(true); incTopCount()}}>Показать все</Button>
 			</Group>
 		</Panel>
 		)
-};
+}
 
-// Home.propTypes = {
-// 	id: PropTypes.string.isRequired,
-// 	vkDataService: PropTypes.any,
-// 	fetchedUser: PropTypes.shape({
-// 		photo_200: PropTypes.string,
-// 		first_name: PropTypes.string,
-// 		last_name: PropTypes.string,
-// 		city: PropTypes.shape({
-// 			title: PropTypes.string,
-// 		}),
-// 	}),
-// };
-
-export default Home;
+export default DataScreen;

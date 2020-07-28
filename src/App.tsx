@@ -7,21 +7,18 @@ import bridge from "@vkontakte/vk-bridge";
 import log from "./logger"
 
 import StartScreen from "./panels/StartScreen";
-import Home from './panels/Home';
+import DataScreen from './panels/DataScreen';
 
 const App = () => {
 	const pageSize = 10
 	const [activePanel, setActivePanel] = useState('startScreen')
 	const [vkDataService, setVKDataService] = useState(createVKDataService())
-	const [fetchedUser, setUser] : any = useState({})
-	const [popout, setPopout] : any = useState(<ScreenSpinner/>)
+	const [fetchedUser, setUser] : any = useState()
+	const [popout, setPopout] : any = useState(null)
 	const [items, setItems] : any = useState([])
-	const [groupsData, setGroupsData] = useState(new Map())
-	const [topDataArr, setTopData] : any = useState([])
-	const [topDataMaxNum, setTopDataMaxNum] : any = useState(pageSize*2 - 1)
+	const [groupsData] = useState(new Map())
+	const [topDataArr] = useState(Array(pageSize))
 	const [topDataHasMore, setTopDataHasMore] : any = useState(false)
-	const [topDataKeys, setTopDataKeys] : any = useState(new Set())
-	const [refreshId, refreshView]: any = useState(0)
 	const [counters, setCounters] : any[] = useState({ requestsSent:0, requestsQueued:0, friendsCount:0, friendsDataReceived:0, attemptsCountExceeded:0, friendsErrorResponse:0, userSawResults:0 })
 	const [token, setToken] = useState(null)
 	const [schedule, setSchedule] = useState({ timers: [] })
@@ -30,35 +27,28 @@ const App = () => {
 	const cleanState = () => {
 		// todo: clean state
         schedule.timers.forEach((t: any) => {
-            t.cancel();
-		});
-		setSchedule({timers: []});
-		setGroupsData(new Map());
+            t.cancel()
+		})
+		setSchedule({timers: []})
 	}
 
 	useEffect(() => {
 		vkDataService.LoadInitialData().then((res: any) => {
-			setToken(res[1].access_token);
-			setUser(res[0]);
-		}).catch((err) => onError(err));
+			setToken(res[1].access_token)
+			setUser(res[0])
+			setPopout(null)
+		}).catch((err: any) => onError(err))
 	}, [vkDataService])
 
 	useEffect(() => {
-		let data = 
-		// ((counters.friendsDataReceived + counters.attemptsCountExceeded + counters.friendsErrorResponse) / counters.friendsCount >= 0.99)
-			// ? ''
-			// : 
-			vkDataService.GetUpdatedTopData(groupsData, topDataArr, topDataMaxNum, topDataKeys)
-		setItems(data)
-		setTopDataHasMore(topDataArr.length < groupsData.size)
-		log('data.length')
-		log(data.length)
-	}, [refreshId, groupsData, topDataMaxNum, topDataArr, topDataKeys, vkDataService])
-
-	useEffect(() => {
-		log('fetchedUser changed')
-		if (!!fetchedUser.id){
-			vkDataService.LoadFriendsGroupsData(props);
+		if (!!fetchedUser){
+			vkDataService.LoadFriendsGroupsData(props).then((_: any) => {
+				setPopout(<ScreenSpinner/>)
+				const groupsDataArr = Array.from(groupsData.entries()).sort((a: any, b: any) => { return b[1].friends - a[1].friends; }).map((e: any) => { return {value:[e[0], e[1]] }});
+				setItems(groupsDataArr)
+				setTopDataHasMore(false)
+				setPopout(null)
+			}).catch((err: any) => onError(err))
 			setPopout(null);
 		}
 	}, [fetchedUser, vkDataService])
@@ -77,10 +67,12 @@ const App = () => {
 		fetchedUser: fetchedUser,
 		incCounter: incCounter,
 		groupsData: groupsData,
+		topDataArr: topDataArr,
+		setItems: setItems,
+		setTopDataHasMore: setTopDataHasMore,
 		schedule: schedule,
 		token: token,
 		onError: onError,
-		refreshView: refreshView
 	}
 
 	useEffect(() => {
@@ -94,20 +86,21 @@ const App = () => {
 	}, [])
 
 	return (
-		// <div><div>friendsCount: {counters.friendsCount}</div>
-		// <div>friendsDataReceived: {counters.friendsDataReceived}</div>
-		// <div>requestsSent: {counters.requestsSent}</div>
-		// <div>timers.length: {schedule.timers.length}</div>
-		// </div>
 		<View activePanel={activePanel} popout={popout}>
-			<StartScreen id='startScreen' go={() => setActivePanel('home')}/>
-			<Home id='home' 
+			<StartScreen id='startScreen' go={() => {if (!fetchedUser){ setPopout(<ScreenSpinner/>) }; setActivePanel('dataScreen')}}/>
+			<DataScreen id='dataScreen'
 				fetchedUser = {fetchedUser} 
 				vkDataService = {vkDataService}
 				items={items} 
 				incTopCount = {() => {
-					log('incTopCount ' + (Number(topDataMaxNum) + Number(pageSize)));
-					setTopDataMaxNum(Number(topDataMaxNum) + Number(pageSize))
+					const addLength = Math.min(groupsData.size, topDataArr.length + pageSize) - topDataArr.length
+					let i = 0
+					while(i++ < addLength){
+						topDataArr.push(undefined)
+					}
+					const {data, hasMore} = vkDataService.GetUpdatedTopData(groupsData, topDataArr)
+					setItems(data)
+					setTopDataHasMore(hasMore)
 				}} 
 				hasMore = {topDataHasMore}
 				counters = {counters}
