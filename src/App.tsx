@@ -49,7 +49,6 @@ const App = () => {
 				setTopDataHasMore(false)
 				setPopout(null)
 			}).catch((err: any) => onError(err))
-			setPopout(null);
 		}
 	}, [fetchedUser, vkDataService])
 
@@ -68,7 +67,10 @@ const App = () => {
 		incCounter: incCounter,
 		groupsData: groupsData,
 		topDataArr: topDataArr,
-		setItems: setItems,
+		setItems: (data: any) => {
+			setPopout(null)
+			setItems(data)
+		},
 		setTopDataHasMore: setTopDataHasMore,
 		schedule: schedule,
 		token: token,
@@ -87,7 +89,10 @@ const App = () => {
 
 	return (
 		<View activePanel={activePanel} popout={popout}>
-			<StartScreen id='startScreen' go={() => {if (!fetchedUser){ setPopout(<ScreenSpinner/>) }; setActivePanel('dataScreen')}}/>
+			<StartScreen id='startScreen' go={() => {
+				setPopout(<ScreenSpinner/>)
+				setActivePanel('dataScreen')
+			}}/>
 			<DataScreen id='dataScreen'
 				fetchedUser = {fetchedUser} 
 				vkDataService = {vkDataService}
