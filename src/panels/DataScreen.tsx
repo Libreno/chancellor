@@ -13,9 +13,10 @@ import { List } from '@vkontakte/vkui';
 import InfiniteScroll from 'react-infinite-scroll-component';
 import log from '../logger'
 import '../styles/style.css'
+import { API_GROUPS_GET_REQUEST_INTERVAL } from "../services/VKDataService"
 
 // rename to GroupsDataComponent
-const DataScreen = ({ id, fetchedUser, vkDataService, counters, items, incTopCount, hasMore, error }: any) => {
+const DataScreen = ({ id, fetchedUser, vkDataService, counters, items, incTopCount, hasMore, error, schedule }: any) => {
 	const loadUserClick = () => {
 		if (userLink === ""){
 			return
@@ -30,6 +31,10 @@ const DataScreen = ({ id, fetchedUser, vkDataService, counters, items, incTopCou
 
 	const buttonMoreStyle = {
 		display:showAll||!hasMore? 'none': 'block'
+	}
+
+	const progressStyle = {
+		display: counters.friendsDataReceived + counters.attemptsCountExceeded + counters.friendsErrorResponse === counters.friendsCount? 'none' : 'block'
 	}
 
 	// log('DataScreen items.length ' + items.length)
@@ -52,6 +57,14 @@ const DataScreen = ({ id, fetchedUser, vkDataService, counters, items, incTopCou
 				</Group>}
 			</FormLayout>
 
+			<table id='allfriends-progressbar'><tbody><tr>
+				<td>
+					Загружено {counters.friendsDataReceived + counters.attemptsCountExceeded + counters.friendsErrorResponse} из {counters.friendsCount}. 
+				</td>
+				<td style={progressStyle}>
+					Осталось ~ {Math.round(schedule.timers.length * API_GROUPS_GET_REQUEST_INTERVAL / 60000)} мин.
+				</td></tr></tbody>
+			</table>
 			<Progress value={(counters.friendsDataReceived + counters.attemptsCountExceeded + counters.friendsErrorResponse) * 100 / counters.friendsCount} />
 
 			<Group id='allfriends-groups-list'>

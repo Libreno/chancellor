@@ -1,5 +1,5 @@
 import bridge from "@vkontakte/vk-bridge";
-import log from "../logger"
+import log, { warn } from "../logger"
 
 const APP_ID = 7505513;
 const APP_SCOPE = "friends, docs";
@@ -23,15 +23,15 @@ const createVKDataService = () => {
                 .catch(e => reject(e))
                 .then((getFriendsPromises: any) => {
                     Promise.all(getFriendsPromises).then((friendsDataArr) => {
-                        return friendsDataArr.map((friends: any) => {
-                            return friends.items.map((friendId: number) => {
+                        let timerCounter = 0
+                        return friendsDataArr.map((friends: any) => friends.items).flat()
+                            .map((friendId: number) => {
                                 return new Promise((resolve) => {
                                     const tryGetFriendsData = (retryNum: number) => {
-                                        const cancelToken = {};
+                                        const cancelToken = { id: timerCounter++ };
                                         callAPIGetGroups(props, friendId, cancelToken).then((groupsResp) => {
                                             onGroupsDataReceived(props, groupsResp)
                                             resolve({succeed:true})
-                                            props.schedule.timers.push(cancelToken)
                                         }).catch((e) => {
                                             const errCode = e?.error_data?.error_reason?.error_code
                                             // Error code 6 - "too many requests per second"
@@ -55,7 +55,6 @@ const createVKDataService = () => {
                                     return tryGetFriendsData(0)
                                 })
                             })
-                        })
                     })
                     .then((groupsPromises: any[]) => {
                         Promise.all(groupsPromises.flat()).then(_ => {
@@ -131,10 +130,21 @@ const createVKDataService = () => {
             // limit 3 requests per second for method 'groups.get'
             scheduledTime_ms = Math.max(scheduledTime_ms + API_GROUPS_GET_REQUEST_INTERVAL, Date.now())
             let timeout = scheduledTime_ms - Date.now()
+            props.schedule.timers.push(cancelToken)
             const timeoutId = setTimeout(() => {
                 // log(request)
                 props.incCounter('requestsSent')
-                bridge.send("VKWebAppCallAPIMethod", request).then(data => resolve(data)).catch(e => reject(e))
+                bridge.send("VKWebAppCallAPIMethod", request).then(data => {
+                    const ind = props.schedule.timers.findIndex((t:any) => t.id === cancelToken.id)
+                    if (ind !== -1){
+                        props.schedule.timers.splice(ind, 1)
+                        // log('timer ' + cancelToken.id + ' was removed from schedule')
+                    }
+                    else {
+                        // warn('Warning: timer ' + cancelToken.id + ' was not found in schedule.timers')
+                    }
+                    resolve(data)
+                }).catch(e => reject(e))
             }, timeout)
             // log(`wait ${timeout} ms`)
             props.incCounter('requestsQueued')
@@ -210,4 +220,5 @@ const createVKDataService = () => {
     }
 }
 
-export default createVKDataService;
+export default createVKDataService
+export { API_GROUPS_GET_REQUEST_INTERVAL }

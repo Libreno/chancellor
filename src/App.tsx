@@ -109,7 +109,8 @@ const App = () => {
 				}} 
 				hasMore = {topDataHasMore}
 				counters = {counters}
-				error = {error}/>
+				error = {error}
+				schedule = {schedule}/>
 		</View>
 	)
 }
