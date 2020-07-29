@@ -1,8 +1,8 @@
-import React from 'react';
-import Panel from '@vkontakte/vkui/dist/components/Panel/Panel';
-import Button from '@vkontakte/vkui/dist/components/Button/Button';
+import React from 'react'
+import Panel from '@vkontakte/vkui/dist/components/Panel/Panel'
+import Button from '@vkontakte/vkui/dist/components/Button/Button'
 import '../styles/style.css'
-import { PanelHeader } from '@vkontakte/vkui';
+import { PanelHeader } from '@vkontakte/vkui'
 
 const StartScreen = ({id, go}: any) => {
     return (
@@ -34,4 +34,4 @@ const StartScreen = ({id, go}: any) => {
         </Panel>)
 }
 
-export default StartScreen;
+export default StartScreen

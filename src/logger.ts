@@ -1,12 +1,12 @@
 const consolewrite = (write: any) => {
     return (message: any) => {
-        var today = new Date();
-        var time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds() + ":" + today.getMilliseconds();
+        var today = new Date()
+        var time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds() + ":" + today.getMilliseconds()
         if (typeof message === 'object'){
-            write(`${time} => object:`);
-            write(message);
+            write(`${time} => object:`)
+            write(message)
         } else {
-            write(`${time} => ${message}`);
+            write(`${time} => ${message}`)
         }
     }
 }

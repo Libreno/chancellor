@@ -1,15 +1,15 @@
-import bridge from "@vkontakte/vk-bridge";
+import bridge from "@vkontakte/vk-bridge"
 import log, { warn } from "../logger"
 
-const APP_ID = 7505513;
-const APP_SCOPE = "friends, docs";
-const API_VERSION = "5.110";
-const FRIENDS_GET_REQEST_ID = "friends.get";
-const GROUPS_GET_REQEST_ID = "groups.get";
-const USERS_GET_REQEST_ID = "users.get";
-const FRIENDS_MAX_COUNT_PER_REQUEST = 5000;
-const REQUEST_ATTEMPTS_COUNT_MAX = 9;
-const API_GROUPS_GET_REQUEST_INTERVAL = 350;
+const APP_ID = 7505513
+const APP_SCOPE = "friends, docs"
+const API_VERSION = "5.110"
+const FRIENDS_GET_REQEST_ID = "friends.get"
+const GROUPS_GET_REQEST_ID = "groups.get"
+const USERS_GET_REQEST_ID = "users.get"
+const FRIENDS_MAX_COUNT_PER_REQUEST = 5000
+const REQUEST_ATTEMPTS_COUNT_MAX = 9
+const API_REQUEST_INTERVAL = 350
 const KNOWN_ERRORS = [30, 7, 18, 29]
 
 const createVKDataService = () => {
@@ -17,19 +17,17 @@ const createVKDataService = () => {
         return new Promise((resolve, reject) => {
             let params = { user_id: props.fetchedUser.id, count: FRIENDS_MAX_COUNT_PER_REQUEST }
             callAPI(props, "friends.get", getRequestId(props.fetchedUser?.id, FRIENDS_GET_REQEST_ID, null), params)
-                .then((resp) => {
+                .then((resp: any) => {
                     return onFriendsDataReceived(props, resp.response)
                 })
                 .catch(e => reject(e))
                 .then((getFriendsPromises: any) => {
                     Promise.all(getFriendsPromises).then((friendsDataArr) => {
-                        let timerCounter = 0
                         return friendsDataArr.map((friends: any) => friends.items).flat()
                             .map((friendId: number) => {
                                 return new Promise((resolve) => {
                                     const tryGetFriendsData = (retryNum: number) => {
-                                        const cancelToken = { id: timerCounter++ };
-                                        callAPIGetGroups(props, friendId, cancelToken).then((groupsResp) => {
+                                        callAPIGetGroups(props, friendId).then((groupsResp) => {
                                             onGroupsDataReceived(props, groupsResp)
                                             resolve({succeed:true})
                                         }).catch((e) => {
@@ -40,13 +38,13 @@ const createVKDataService = () => {
                                                     log(e) 
                                                 }
                                                 props.incCounter('friendsErrorResponse')                                            
-                                                resolve({ succeed: false, friendId: friendId, error: e.error_data.error_reason.error_msg})                                            
+                                                resolve({ succeed: false, friendId: friendId, error: e.error_data?.error_reason?.error_msg ?? JSON.stringify(e)})
                                                 return
                                             }
                                             // If 10 times failed with "too many requests" error, then stop trying, perhaps there is a new problem.
                                             if (retryNum >= REQUEST_ATTEMPTS_COUNT_MAX){
                                                 props.incCounter('attemptsCountExceeded')
-                                                resolve({ succeed: false, friendId: friendId, error: e.error_data.error_reason.error_msg})                                            
+                                                resolve({ succeed: false, friendId: friendId, error: e.error_data?.error_reason?.error_msg ?? JSON.stringify(e)})
                                                 return
                                             }
                                             tryGetFriendsData(retryNum + 1)
@@ -68,67 +66,54 @@ const createVKDataService = () => {
     }
     
     const onFriendsDataReceived = (props: any, response: any) => {
-        let friends = response.items;
-        props.incCounter('friendsCount', friends.length);
-        let friendsRequestOffset = 0;
-        let res = [];
+        let friends = response.items
+        props.incCounter('friendsCount', friends.length)
+        let friendsRequestOffset = 0
+        let res = []
         while (friendsRequestOffset + FRIENDS_MAX_COUNT_PER_REQUEST < response.count){
-            friendsRequestOffset += FRIENDS_MAX_COUNT_PER_REQUEST;
-            let params = {count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: friendsRequestOffset, user_id: props.fetchedUser?.id !== undefined? props.fetchedUser.id: null};
+            friendsRequestOffset += FRIENDS_MAX_COUNT_PER_REQUEST
+            let params = {count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: friendsRequestOffset, user_id: props.fetchedUser?.id !== undefined? props.fetchedUser.id: null}
             const requestId = getRequestId(props.fetchedUser?.id, FRIENDS_GET_REQEST_ID, null, null, friendsRequestOffset)
-            res.push(callAPI(props, FRIENDS_GET_REQEST_ID, requestId, params));
+            res.push(callAPI(props, FRIENDS_GET_REQEST_ID, requestId, params))
         }
 
         res.push(Promise.resolve(response))
-        return res;        
-    };
+        return res        
+    }
 
     const onGroupsDataReceived = (props: any, responseData: any) => {
         if (!!responseData.response.items){
             responseData.response.items.forEach((g: any) => {
-                let key = g.screen_name;
+                let key = g.screen_name
                 let obj = props.groupsData.get(key)
                 if (obj){
                     obj.friends++
                 } else {
                     props.groupsData.set(key, {name:g.name, friends: 1})
                 }
-            });
-        };
+            })
+        }
         props.incCounter('friendsDataReceived')
         const {data, hasMore} = getUpdatedTopData(props.groupsData, props.topDataArr)
         props.setItems(data)
         props.setTopDataHasMore(hasMore)
-    };
+    }
     
-    const callAPI = (props: any, method: string, requestId: string, params: any) => { 
+    let timerCounter = 0
+    let scheduledTime_ms = 0
+    const callAPI = (props: any, method: string, requestId: string, params: any, new_scheduledTime_ms: any = null) => { 
         let request = {
             method: method, 
             request_id: requestId, 
             params: params
-        };
+        }
         params["v"] = API_VERSION
         params["access_token"] = props.token
-
+        const cancelToken = { id: timerCounter++, cancel: () => {} }
         // log(request)
-        return bridge.send("VKWebAppCallAPIMethod", request)
-    }
-
-    let scheduledTime_ms = 0;
-    const callAPIGetGroups = (props:any, friendId: number, cancelToken: any) => { 
         return new Promise((resolve, reject) => {
-            let request = {
-                method: GROUPS_GET_REQEST_ID,
-                request_id: getRequestId(props.fetchedUser?.id, GROUPS_GET_REQEST_ID, friendId, 1), 
-                params: {
-                    v: API_VERSION,
-                    access_token: props.token,
-                    user_id: friendId,
-                    extended: 1
-            }}
-
             // limit 3 requests per second for method 'groups.get'
-            scheduledTime_ms = Math.max(scheduledTime_ms + API_GROUPS_GET_REQUEST_INTERVAL, Date.now())
+            scheduledTime_ms = Math.max(new_scheduledTime_ms ?? scheduledTime_ms + API_REQUEST_INTERVAL, Date.now())
             let timeout = scheduledTime_ms - Date.now()
             props.schedule.timers.push(cancelToken)
             const timeoutId = setTimeout(() => {
@@ -156,19 +141,26 @@ const createVKDataService = () => {
         })
     }
 
-    const getRequestId = (fetchedUserid: number, method: string, user_id: any = null, extended: any = null, offset: Number = 0) => {
-        return `{"method":"${method}", "profileUserId":"${fetchedUserid}", "user_id":"${user_id? user_id : fetchedUserid}", "extended":"${extended}", "offset":"${offset}"}`;
+    const callAPIGetGroups = (props:any, friendId: number) => { 
+        return callAPI(props, GROUPS_GET_REQEST_ID, getRequestId(props.fetchedUser?.id, GROUPS_GET_REQEST_ID, friendId, 1), {
+            user_id: friendId,
+            extended: 1
+        })
+    }
+
+    const getRequestId = (fetchedUserid: any, method: string, user_id: any = null, extended: any = null, offset: Number = 0) => {
+        return `{"method":"${method}", "profileUserId":"${fetchedUserid}", "user_id":"${user_id? user_id : fetchedUserid}", "extended":"${extended}", "offset":"${offset}"}`
     }
     
-    const changeProfile = (props: any, userName: any) => {
-        callAPI(props, "users.get", getRequestId(props.fetchedUser?.id, USERS_GET_REQEST_ID), { user_ids: userName, fields: "photo_200, city, nickname"});
-    };
+    const getUser = (token: string, schedule: any, incCounter: any, userName: string) => {
+        return callAPI({token: token, schedule: schedule, incCounter: incCounter}, "users.get", getRequestId(null, USERS_GET_REQEST_ID), { user_ids: userName, fields: "photo_200, city, nickname"}, 0)
+    }
 
     const topDataKeys = new Set()
     const getUpdatedTopData = (groupsData: Map<any, any>, topDataArr: Array<any>): any => {
         let i = 0
         const ent = groupsData.entries()
-        const topDataMaxNum = topDataArr.length - 1;
+        const topDataMaxNum = topDataArr.length - 1
         while (i++ < groupsData.size){
             let newEl = ent.next()
             if (topDataArr[topDataMaxNum] === undefined || topDataArr[topDataMaxNum].value[1].friends < newEl.value[1].friends){
@@ -201,9 +193,9 @@ const createVKDataService = () => {
                         topDataKeys.delete(tmp.value[0])
                     }
                 }
-                topDataArr.sort((a: any, b: any) => { if (b === undefined){ return -1;}; if (a === undefined){ return 1;}; return b.value[1].friends - a.value[1].friends; })
-            };
-        };
+                topDataArr.sort((a: any, b: any) => { if (b === undefined){ return -1} if (a === undefined){ return 1} return b.value[1].friends - a.value[1].friends })
+            }
+        }
         return {data: topDataArr.slice(), hasMore: groupsData.size > topDataMaxNum + 1}
     }
 
@@ -212,13 +204,13 @@ const createVKDataService = () => {
             return Promise.all([
 				bridge.send('VKWebAppGetUserInfo'),
 				bridge.send("VKWebAppGetAuthToken", {app_id: APP_ID, scope: APP_SCOPE})
-			]);
+			])
         },
         LoadFriendsGroupsData: loadFriendsGroupsData,
         GetUpdatedTopData: getUpdatedTopData,
-        ChangeProfile: changeProfile
+        GetUser: getUser
     }
 }
 
 export default createVKDataService
-export { API_GROUPS_GET_REQUEST_INTERVAL }
+export { API_REQUEST_INTERVAL }
