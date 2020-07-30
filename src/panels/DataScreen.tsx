@@ -16,11 +16,14 @@ import log from '../logger'
 import '../styles/style.css'
 import { API_REQUEST_INTERVAL } from "../services/VKDataService"
 
-const DataScreen = ({ id, token, fetchedUser, vkDataService, counters, items, incTopCount, hasMore, error, onError, schedule, cleanState, changeUser, setPopOut, incCounter }: any) => {
+const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeUser, setPopOut, setParentState, incCounter }: any) => {
 	const [userLink, setUserLink] = useState('')
 	const [showAll, setShowAll] = useState(false)
 
 	const loadUserClick = () => {
+		setParentState({
+			error: null
+		})
 		if (userLink === ""){
 			return
 		}
@@ -28,8 +31,7 @@ const DataScreen = ({ id, token, fetchedUser, vkDataService, counters, items, in
 		let userName = segments[segments.length - 1]
 		log(userName)
 		cleanState()
-		vkDataService.GetUser(token, schedule, incCounter, userName).then((userResponse: any) => {
-			log(userResponse)
+		parentState.vkDataService.GetUser(parentState.token, parentState.timers, incCounter, userName).then((userResponse: any) => {
 			// todo check if new user is not equal to previously fetched
 			// setUserLink()
 			// setPopOut(
@@ -65,52 +67,48 @@ const DataScreen = ({ id, token, fetchedUser, vkDataService, counters, items, in
 	}
 
 	const buttonMoreStyle = {
-		display:showAll||!hasMore? 'none': 'block'
+		display:showAll||!parentState.topDataHasMore? 'none': 'block'
 	}
 
 	const progressStyle = {
-		display: counters.friendsDataReceived + counters.attemptsCountExceeded + counters.friendsErrorResponse === counters.friendsCount? 'none' : 'block'
+		display: parentState.counters.friendsDataReceived + parentState.counters.attemptsCountExceeded + parentState.counters.friendsErrorResponse === parentState.counters.friendsCount? 'none' : 'block'
 	}
-
-	// log('DataScreen items.length ' + items.length)
-	// log('DataScreen hasMore ' + hasMore)
-
+	
 	return (
 		<Panel id={id}>
 			<PanelHeader>Мои друзья и их сообщества</PanelHeader>
 			<FormLayout>
-				<FormStatus hidden={!error} header="Ошибка" mode="error">{error}</FormStatus>
+				<FormStatus hidden={!parentState.error} header="Ошибка" mode="error">{parentState.error}</FormStatus>
 				<Input type = "text" onChange={(e) => {setUserLink(e.target.value)}}/>
 				<Button stretched size = "xl" onClick={loadUserClick}>Загрузить</Button>
-				{fetchedUser &&
+				{parentState.fetchedUser &&
 				<Group>
 					<Cell
-						before={fetchedUser.photo_200 ? <Avatar src={fetchedUser.photo_200}/> : null}
-						description={fetchedUser.city && fetchedUser.city.title ? fetchedUser.city.title : ''}>
-						{`${fetchedUser.first_name} ${fetchedUser.last_name}`}
+						before={parentState.fetchedUser.photo_200 ? <Avatar src={parentState.fetchedUser.photo_200}/> : null}
+						description={parentState.fetchedUser.city && parentState.fetchedUser.city.title ? parentState.fetchedUser.city.title : ''}>
+						{`${parentState.fetchedUser.first_name} ${parentState.fetchedUser.last_name}`}
 					</Cell>
 				</Group>}
 			</FormLayout>
-
-			<table id='allfriends-progressbar'><tbody><tr>
-				<td>
-					Загружено {counters.friendsDataReceived + counters.attemptsCountExceeded + counters.friendsErrorResponse} из {counters.friendsCount}. 
-				</td>
-				<td style={progressStyle}>
-					Осталось ~ {Math.round(schedule.timers.length * API_REQUEST_INTERVAL / 60000)} мин.
-				</td></tr></tbody>
-			</table>
-			<Progress value={(counters.friendsDataReceived + counters.attemptsCountExceeded + counters.friendsErrorResponse) * 100 / counters.friendsCount} />
+			<div id='allfriends-progressbar'>
+				<div>
+					Загружено {parentState.counters.friendsDataReceived + parentState.counters.attemptsCountExceeded + parentState.counters.friendsErrorResponse} из {parentState.counters.friendsCount} друзей. 
+				</div>
+				<div style={progressStyle}>
+					Осталось ~ {Math.round(parentState.timers.length * API_REQUEST_INTERVAL / 60000)} мин.
+				</div>
+			</div>
+			<Progress value={(parentState.counters.friendsDataReceived + parentState.counters.attemptsCountExceeded + parentState.counters.friendsErrorResponse) * 100 / parentState.counters.friendsCount} />
 
 			<Group id='allfriends-groups-list'>
 				<List>
 					<InfiniteScroll
-						dataLength={items.length}
+						dataLength={parentState.items.length}
 						next={incTopCount}
-						hasMore={hasMore}
+						hasMore={parentState.topDataHasMore}
 						loader={<h4>Loading...</h4>}
 						>
-						{items.map((item: any, i: number) => {
+						{parentState.items.map((item: any, i: number) => {
 							return <div className='allfriends-vk-group-card' key={i}>
 										<div className='group-name'>[{item.value[1].friends}]&nbsp;{item.value[1].name}</div>
 										<div className='group-id'>{item.value[0]}</div>

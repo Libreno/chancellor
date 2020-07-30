@@ -101,6 +101,7 @@ const createVKDataService = () => {
     
     let timerCounter = 0
     let scheduledTime_ms = 0
+    // todo: move scheduledTime_ms to state
     const callAPI = (props: any, method: string, requestId: string, params: any, new_scheduledTime_ms: any = null) => { 
         let request = {
             method: method, 
@@ -115,14 +116,14 @@ const createVKDataService = () => {
             // limit 3 requests per second for method 'groups.get'
             scheduledTime_ms = Math.max(new_scheduledTime_ms ?? scheduledTime_ms + API_REQUEST_INTERVAL, Date.now())
             let timeout = scheduledTime_ms - Date.now()
-            props.schedule.timers.push(cancelToken)
+            props.timers.push(cancelToken)
             const timeoutId = setTimeout(() => {
                 // log(request)
                 props.incCounter('requestsSent')
                 bridge.send("VKWebAppCallAPIMethod", request).then(data => {
-                    const ind = props.schedule.timers.findIndex((t:any) => t.id === cancelToken.id)
+                    const ind = props.timers.findIndex((t:any) => t.id === cancelToken.id)
                     if (ind !== -1){
-                        props.schedule.timers.splice(ind, 1)
+                        props.timers.splice(ind, 1)
                         // log('timer ' + cancelToken.id + ' was removed from schedule')
                     }
                     else {
@@ -152,8 +153,8 @@ const createVKDataService = () => {
         return `{"method":"${method}", "profileUserId":"${fetchedUserid}", "user_id":"${user_id? user_id : fetchedUserid}", "extended":"${extended}", "offset":"${offset}"}`
     }
     
-    const getUser = (token: string, schedule: any, incCounter: any, userName: string) => {
-        return callAPI({token: token, schedule: schedule, incCounter: incCounter}, "users.get", getRequestId(null, USERS_GET_REQEST_ID), { user_ids: userName, fields: "photo_200, city, nickname"}, 0)
+    const getUser = (token: string, timers: any, incCounter: any, userName: string) => {
+        return callAPI({token: token, timers: timers, incCounter: incCounter}, "users.get", getRequestId(null, USERS_GET_REQEST_ID), { user_ids: userName, fields: "photo_200, city, nickname"}, 0)
     }
 
     const topDataKeys = new Set()

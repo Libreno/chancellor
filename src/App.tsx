@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { ReactElement } from 'react'
 import View from '@vkontakte/vkui/dist/components/View/View'
 import ScreenSpinner from '@vkontakte/vkui/dist/components/ScreenSpinner/ScreenSpinner'
 import '@vkontakte/vkui/dist/vkui.css'
@@ -9,23 +9,53 @@ import log from "./logger"
 import StartScreen from "./panels/StartScreen"
 import DataScreen from './panels/DataScreen'
 
-const App = () => {
-	const pageSize = 10
-	const countersZero = { requestsSent:0, requestsQueued:0, friendsCount:0, friendsDataReceived:0, attemptsCountExceeded:0, friendsErrorResponse:0, userSawResults:0 }
-	const [activePanel, setActivePanel] = useState('startScreen')
-	const [vkDataService, setVKDataService] = useState(createVKDataService())
-	const [fetchedUser, setUser] : any = useState()
-	const [popout, setPopout] : any = useState(null)
-	const [items, setItems] : any = useState([])
-	const [groupsData, setGroupsData] = useState(new Map())
-	const [topDataArr, setTopDataArr] = useState(Array(pageSize))
-	const [topDataHasMore, setTopDataHasMore] : any = useState(false)
-	const [counters, setCounters] : any[] = useState(countersZero)
-	const [token, setToken] = useState(null)
-	const [schedule, setSchedule] = useState({ timers: [] })
-	const [error, setError] = useState(null)
-	
-	useEffect(() => {
+interface IState{
+	activePanel: string,
+	vkDataService?: any,
+	fetchedUser?: any,
+	popOut: ReactElement | null,
+	// todo: remove items, use topDataArr instead
+	items: Array<any>,
+	groupsData: Map<any, any>,
+	topDataArr: Array<any>,
+	topDataHasMore: boolean,
+	counters: any,
+	token: string | null,
+	timers: Array<any>,
+	error?: any
+}
+
+const PAGE_SIZE = 10
+const COUNTERS_ZERO = { requestsSent:0, requestsQueued:0, friendsCount:0, friendsDataReceived:0, attemptsCountExceeded:0, friendsErrorResponse:0 }
+class App extends React.Component<{}, IState>{
+	constructor(props: any){
+		super(props)
+
+		let vkDataService = createVKDataService()
+		this.state = {
+			activePanel: 'startScreen',
+			// todo: move out vkDataService from state
+			vkDataService: vkDataService,
+			fetchedUser: null,
+			popOut: null,
+			items: [],
+			groupsData: new Map(),
+			topDataArr: new Array(PAGE_SIZE),
+			topDataHasMore: false,
+			counters: COUNTERS_ZERO,
+			token: null,
+			timers: [],
+			error: null
+		}
+		this.incCounter = this.incCounter.bind(this)
+		this.createChlidProps = this.createChlidProps.bind(this)
+		this.loadData = this.loadData.bind(this)
+		this.incCounter = this.incCounter.bind(this)
+		this.onError = this.onError.bind(this)
+		this.incTopCount = this.incTopCount.bind(this)
+		this.cleanState = this.cleanState.bind(this)
+		this.changeUser = this.changeUser.bind(this)
+
 		bridge.subscribe(({ detail: { type, data }}: any) => {
 			if (type === 'VKWebAppUpdateConfig') {
 				const schemeAttribute = document.createAttribute('scheme')
@@ -34,103 +64,124 @@ const App = () => {
 			}
 		})
 		vkDataService.LoadInitialData().then((res: any) => {
-			setToken(res[1].access_token)
-			setUser(res[0])
-			setPopout(null)
-			loadData(createProps(res[0], res[1].access_token))
-		}).catch((err: any) => onError(err))
-	}, [])
+			this.setState({
+				token: res[1].access_token,
+				fetchedUser: res[0],
+				popOut: null
+			})
+			this.loadData(this.createChlidProps(res[0], res[1].access_token))
+		}).catch((err: any) => this.onError(err))
+	}
 
-	const createProps = (user: any, token: string | null) => {
+	createChlidProps (user: any, token: string | null) {
 		return {
 			fetchedUser: user,
-			incCounter: incCounter,
 			token: token,
-			schedule: schedule,
-			groupsData: groupsData,
-			topDataArr: topDataArr,
-			setItems: (data: any) => {
-				setPopout(null)
-				setItems(data)
+			timers: this.state.timers,
+			items: this.state.items,
+			topDataArr: this.state.topDataArr,
+			groupsData: this.state.groupsData,
+			setTopDataHasMore: (hasMore: boolean) => {
+				this.setState({
+					topDataHasMore: hasMore
+				})
 			},
-			setTopDataHasMore: setTopDataHasMore
+			incCounter: this.incCounter,
+			setItems: (data: any) => {
+				this.setState({
+					popOut: null,
+					items: data
+				})
+			}
 		}
 	}
 
-	const loadData = (props: any) => {
-		vkDataService.LoadFriendsGroupsData(props).then((_: any) => {
-			setPopout(<ScreenSpinner/>)
-			const groupsDataArr = Array.from(groupsData.entries()).sort((a: any, b: any) => { return b[1].friends - a[1].friends }).map((e: any) => { return {value:[e[0], e[1]] }})
-			setItems(groupsDataArr)
-			setTopDataHasMore(false)
-			setPopout(null)
-		}).catch((err: any) => onError(err))
+	loadData (props: any) {
+		this.state.vkDataService.LoadFriendsGroupsData(props).then((_: any) => {
+			const groupsDataArr = Array.from(this.state.groupsData.entries()).sort((a: any, b: any) => { return b[1].friends - a[1].friends }).map((e: any) => { return {value:[e[0], e[1]] }})
+			this.setState({
+				popOut: null,
+				items: groupsDataArr,
+				topDataHasMore: false,
+			})
+		}).catch((err: any) => this.onError(err))
 	}
 
-	const incCounter = (counterName: any, addVal = 1) => {
-		counters[counterName] = (counters[counterName] ?? 0) + addVal
-		setCounters(counters)
-		// log(`rS ${counters.requestsSent}, rQ ${counters.requestsQueued}, fC ${counters.friendsCount}, fDR ${counters.friendsDataReceived}, aCE ${counters.attemptsCountExceeded}, fER ${counters.friendsErrorResponse}`)
+	incCounter (counterName: any, addVal = 1) {
+		this.setState((state: any) => {
+			let counters = Object.assign({}, state.counters)
+			counters[counterName] = (counters[counterName] ?? 0) + addVal
+			// log(`rS ${counters.requestsSent}, rQ ${counters.requestsQueued}, fC ${counters.friendsCount}, fDR ${counters.friendsDataReceived}, aCE ${counters.attemptsCountExceeded}, fER ${counters.friendsErrorResponse}`)
+			return {
+				counters: counters
+			}
+		})
 	}
 
-	const onError = (errorResponse: any) => {
+	onError (errorResponse: any) {
 		log(errorResponse)
-		setError(errorResponse?.error_data?.error_reason?.error_msg ?? "Произошла ошибка: " + JSON.stringify(errorResponse))
+		this.setState({
+			error: (errorResponse?.error_data?.error_reason?.error_msg ?? "Произошла ошибка: " + JSON.stringify(errorResponse))
+		})
 	}
 
-	const incTopCount = () => {
-		const addLength = Math.min(groupsData.size, topDataArr.length + pageSize) - topDataArr.length
+	incTopCount () {
+		const addLength = Math.min(this.state.groupsData.size, this.state.topDataArr.length + PAGE_SIZE) - this.state.topDataArr.length
 		let i = 0
 		while(i++ < addLength){
-			topDataArr.push(undefined)
+			this.state.topDataArr.push(undefined)
 		}
-		const {data, hasMore} = vkDataService.GetUpdatedTopData(groupsData, topDataArr)
-		setItems(data)
-		setTopDataHasMore(hasMore)
+		const {data, hasMore} = this.state.vkDataService.GetUpdatedTopData(this.state.groupsData, this.state.topDataArr)
+		this.setState({
+			items: data,
+			topDataHasMore:hasMore
+		})
 	}
 
-	const cleanState = () => {
-		setPopout(<ScreenSpinner/>)
-		schedule.timers.forEach((t: any) => { t.cancel() })
-		setSchedule({timers: []})
-		setItems([])
-		setGroupsData(new Map())
-		setTopDataArr(new Array(pageSize))
-		setTopDataHasMore(false)
-		setCounters({ requestsSent:0, requestsQueued:0, friendsCount:0, friendsDataReceived:0, attemptsCountExceeded:0, friendsErrorResponse:0, userSawResults:0 })
+	cleanState () {
+		this.state.timers.forEach((t: any) => { t.cancel() })
+		this.setState({
+			timers: [],
+			items: [],
+			groupsData: new Map(),
+			topDataArr: new Array(PAGE_SIZE),
+			topDataHasMore: false,
+			counters: COUNTERS_ZERO
+		})
 	}
 
-	const changeUser = (user: any) => {
-		setUser(user)
-		setPopout(null)
-		setVKDataService(createVKDataService())
-		loadData(createProps(user, token))
+	changeUser (user: any) {
+		this.setState({
+			fetchedUser: user,
+			popOut: null,
+			vkDataService: createVKDataService()
+		})
+		this.loadData(this.createChlidProps(user, this.state.token))
 	}
 
-	return (
-		<View activePanel={activePanel} popout={popout}>
-			<StartScreen id='startScreen' go={() => {
-				setPopout(<ScreenSpinner/>)
-				setActivePanel('dataScreen')
-			}}/>
-			<DataScreen id='dataScreen'
-				token = {token}
-				fetchedUser = {fetchedUser} 
-				vkDataService = {vkDataService}
-				items={items} 
-				incTopCount = {incTopCount} 
-				hasMore = {topDataHasMore}
-				counters = {counters}
-				error = {error}
-				onError = {onError}
-				schedule = {schedule}
-				cleanState = {cleanState}
-				changeUser = {changeUser}
-				setPopout = {setPopout}
-				incCounter = {incCounter}
-			/>
-		</View>
-	)
+	render() { 
+		return (
+			<View activePanel={this.state.activePanel} popout={this.state.popOut}>
+				<StartScreen id='startScreen' go={() => {
+					this.setState({
+						popOut: <ScreenSpinner/>,
+						activePanel: 'dataScreen'
+					})
+				}}/>
+				<DataScreen id='dataScreen'
+					parentState = {this.state}
+					incTopCount = {this.incTopCount} 
+					onError = {this.onError}
+					cleanState = {this.cleanState}
+					changeUser = {this.changeUser}
+					setParentState = {(s: any) => {
+						this.setState(s)
+					}}
+					incCounter = {this.incCounter}
+				/>
+			</View>
+		)
+	}
 }
 
 export default App
