@@ -24,6 +24,38 @@ const App = () => {
 	const [token, setToken] = useState(null)
 	const [schedule, setSchedule] = useState({ timers: [] })
 	const [error, setError] = useState(null)
+	
+	useEffect(() => {
+		bridge.subscribe(({ detail: { type, data }}: any) => {
+			if (type === 'VKWebAppUpdateConfig') {
+				const schemeAttribute = document.createAttribute('scheme')
+				schemeAttribute.value = data.scheme ? data.scheme : 'client_light'
+				document.body.attributes.setNamedItem(schemeAttribute)
+			}
+		})
+		vkDataService.LoadInitialData().then((res: any) => {
+			setToken(res[1].access_token)
+			setUser(res[0])
+			setPopout(null)
+			loadData(createProps(res[0], res[1].access_token))
+		}).catch((err: any) => onError(err))
+	}, [])
+
+	const createProps = (user: any, token: string | null) => {
+		return {
+			fetchedUser: user,
+			incCounter: incCounter,
+			token: token,
+			schedule: schedule,
+			groupsData: groupsData,
+			topDataArr: topDataArr,
+			setItems: (data: any) => {
+				setPopout(null)
+				setItems(data)
+			},
+			setTopDataHasMore: setTopDataHasMore
+		}
+	}
 
 	const loadData = (props: any) => {
 		vkDataService.LoadFriendsGroupsData(props).then((_: any) => {
@@ -45,34 +77,6 @@ const App = () => {
 		log(errorResponse)
 		setError(errorResponse?.error_data?.error_reason?.error_msg ?? "Произошла ошибка: " + JSON.stringify(errorResponse))
 	}
-
-	useEffect(() => {
-		bridge.subscribe(({ detail: { type, data }}: any) => {
-			if (type === 'VKWebAppUpdateConfig') {
-				const schemeAttribute = document.createAttribute('scheme')
-				schemeAttribute.value = data.scheme ? data.scheme : 'client_light'
-				document.body.attributes.setNamedItem(schemeAttribute)
-			}
-		})
-		vkDataService.LoadInitialData().then((res: any) => {
-			setToken(res[1].access_token)
-			setUser(res[0])
-			setPopout(null)
-			loadData({
-				fetchedUser: res[0],
-				incCounter: incCounter,
-				token: res[1].access_token,
-				schedule: schedule,
-				groupsData: groupsData,
-				topDataArr: topDataArr,
-				setItems: (data: any) => {
-					setPopout(null)
-					setItems(data)
-				},
-				setTopDataHasMore: setTopDataHasMore
-			})
-		}).catch((err: any) => onError(err))
-	}, [])
 
 	const incTopCount = () => {
 		const addLength = Math.min(groupsData.size, topDataArr.length + pageSize) - topDataArr.length
@@ -100,19 +104,7 @@ const App = () => {
 		setUser(user)
 		setPopout(null)
 		setVKDataService(createVKDataService())
-		loadData({
-			fetchedUser: user,
-			incCounter: incCounter,
-			token: token,
-			schedule: schedule,
-			groupsData: groupsData,
-			topDataArr: topDataArr,
-			setItems: (data: any) => {
-				setPopout(null)
-				setItems(data)
-			},
-			setTopDataHasMore: setTopDataHasMore
-		})
+		loadData(createProps(user, token))
 	}
 
 	return (
