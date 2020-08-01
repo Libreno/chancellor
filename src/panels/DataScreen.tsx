@@ -10,70 +10,69 @@ import Input from '@vkontakte/vkui/dist/components/Input/Input'
 import FormLayout from '@vkontakte/vkui/dist/components/FormLayout/FormLayout'
 import FormStatus from '@vkontakte/vkui/dist/components/FormStatus/FormStatus'
 import Avatar from '@vkontakte/vkui/dist/components/Avatar/Avatar'
-import { List } from '@vkontakte/vkui'
+import { List, ScreenSpinner } from '@vkontakte/vkui'
 import InfiniteScroll from 'react-infinite-scroll-component'
-import log from '../logger'
+// import log from '../logger'
 import '../styles/style.css'
 import { API_REQUEST_INTERVAL } from "../services/VKDataService"
 
 const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeUser, setPopOut, setParentState, incCounter }: any) => {
 	const [userLink, setUserLink] = useState('')
-	const [showAll, setShowAll] = useState(false)
+	const [loadedUser, setLoadedUser] = useState('')
 
 	const loadUserClick = () => {
-		setParentState({
-			error: null
-		})
-		if (userLink === ""){
+		if (userLink === "" || loadedUser === userLink){
 			return
 		}
+
 		let segments = userLink.split('/')
 		let userName = segments[segments.length - 1]
-		log(userName)
-		cleanState()
-		parentState.vkDataService.GetUser(parentState.token, parentState.timers, incCounter, userName).then((userResponse: any) => {
-			// todo check if new user is not equal to previously fetched
-			// setUserLink()
-			// setPopOut(
-			// 	<Alert
-			// 		actions={[{
-			// 			title: 'Отмена',
-			// 			autoclose: true,
-			// 			mode: 'cancel'
-			// 		}, {
-			// 			title: 'Загрузить нового пользователя',
-			// 			autoclose: true,
-			// 			action: () => {
-			// 				cleanState()
-			// 				changeUser(userResponse)
-			// 			},
-			// 			mode: 'default'
-			// 		}]}
-			// 		onClose={() => {setPopOut(null)}}
-			// 	>
-			// 		<h2>Подтвердите действие</h2>
-			// 		<p>Смена пользователя приведёт к потере собранных данных текущего пользователя. Вы уверены?</p>
-			// 	</Alert>
-			// )
-			changeUser(userResponse.response[0])
-		}).catch((e: any) => { 
-			onError(e) 
-		})
+
+		if (parentState.counters.friendsCount === 0){
+			loadUser(userName)
+		} else {
+			setPopOut(
+				<Alert actions={[{
+							title: 'Отмена',
+							autoclose: true,
+							mode: 'cancel'
+						}, {
+							title: 'Да',
+							autoclose: true,
+							mode: 'default',
+							action: () => { loadUser(userName) },
+					}]}
+					onClose={() => {setPopOut(null)}}
+					>
+					<p>Прогресс будет потерян. Вы уверены?</p>
+				</Alert>
+			)
+		}
 	}
 
-	const clickMore = () =>{
-		setShowAll(true)
-		incTopCount()
+	const loadUser = (userName: any) => {
+		setPopOut(<ScreenSpinner/>)
+		cleanState()
+		parentState.vkDataService.GetUser(parentState.token, parentState.timers, incCounter, userName).then((userResponse: any) => {
+			setParentState({
+				error: null
+			})
+			changeUser(userResponse.response[0])
+			setLoadedUser(userName)
+		}).catch((e: any) => { 
+			onError(e)
+			setPopOut(null)
+		})
 	}
 
 	const buttonMoreStyle = {
-		display:showAll||!parentState.topDataHasMore? 'none': 'block'
+		display: ((document.getElementById('dataScreen')?.clientHeight ?? 0) < (document.getElementById('allfriends-groups-list')?.clientHeight ?? 0)) || !parentState.topDataHasMore? 'none': 'block'
 	}
 
 	const progressStyle = {
 		display: parentState.counters.friendsDataReceived + parentState.counters.attemptsCountExceeded + parentState.counters.friendsErrorResponse === parentState.counters.friendsCount? 'none' : 'block'
 	}
-	
+
 	return (
 		<Panel id={id}>
 			<PanelHeader>Мои друзья и их сообщества</PanelHeader>
@@ -92,23 +91,24 @@ const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeU
 			</FormLayout>
 			<div id='allfriends-progressbar'>
 				<div>
-					Загружено {parentState.counters.friendsDataReceived + parentState.counters.attemptsCountExceeded + parentState.counters.friendsErrorResponse} из {parentState.counters.friendsCount} друзей. 
+					Загружено {parentState.counters.friendsDataReceived + parentState.counters.attemptsCountExceeded + parentState.counters.friendsErrorResponse} из {parentState.counters.friendsCount} друзей
 				</div>
 				<div style={progressStyle}>
 					Осталось ~ {Math.round(parentState.timers.length * API_REQUEST_INTERVAL / 60000)} мин.
 				</div>
 			</div>
-			<Progress value={(parentState.counters.friendsDataReceived + parentState.counters.attemptsCountExceeded + parentState.counters.friendsErrorResponse) * 100 / parentState.counters.friendsCount} />
+			<Progress value={(parentState.counters.friendsDataReceived + parentState.counters.attemptsCountExceeded + parentState.counters.friendsErrorResponse) * 100 / parentState.counters.friendsCount} 
+				style={progressStyle}/>
 
 			<Group id='allfriends-groups-list'>
 				<List>
 					<InfiniteScroll
-						dataLength={parentState.items.length}
+						dataLength={parentState.topDataArr.length}
 						next={incTopCount}
 						hasMore={parentState.topDataHasMore}
 						loader={<h4>Loading...</h4>}
 						>
-						{parentState.items.map((item: any, i: number) => {
+						{parentState.topDataArr.map((item: any, i: number) => {
 							return <div className='allfriends-vk-group-card' key={i}>
 										<div className='group-name'>[{item.value[1].friends}]&nbsp;{item.value[1].name}</div>
 										<div className='group-id'>{item.value[0]}</div>
@@ -116,10 +116,10 @@ const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeU
 						})}
 					</InfiniteScroll>
 				</List>
-				<Button style={buttonMoreStyle} className="more-button" stretched size = "xl" onClick={clickMore}>Показать все</Button>
+				<Button style={buttonMoreStyle} className="more-button" stretched size = "xl" onClick={incTopCount}>Показать все</Button>
 			</Group>
 		</Panel>
-		)
+	)
 }
 
 export default DataScreen

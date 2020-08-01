@@ -1,5 +1,5 @@
 import bridge from "@vkontakte/vk-bridge"
-import log, { warn } from "../logger"
+import log from "../logger"
 
 const APP_ID = 7505513
 const APP_SCOPE = "friends, docs"
@@ -14,40 +14,45 @@ const KNOWN_ERRORS = [30, 7, 18, 29]
 
 const createVKDataService = () => {
     const loadFriendsGroupsData = (props: any): Promise<Array<any>> => {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
+            // let friendNum = 0
             let params = { user_id: props.fetchedUser.id, count: FRIENDS_MAX_COUNT_PER_REQUEST }
             callAPI(props, "friends.get", getRequestId(props.fetchedUser?.id, FRIENDS_GET_REQEST_ID, null), params)
                 .then((resp: any) => {
-                    return onFriendsDataReceived(props, resp.response)
+                    return onFriendsDataReceived(props, resp)
                 })
-                .catch(e => reject(e))
                 .then((getFriendsPromises: any) => {
                     Promise.all(getFriendsPromises).then((friendsDataArr) => {
-                        return friendsDataArr.map((friends: any) => friends.items).flat()
-                            .map((friendId: number) => {
+                        props.hideSpinner()
+                        return friendsDataArr.map((friendsResp: any) => friendsResp.response.items).flat()
+                            .map((friendId: any) => {
                                 return new Promise((resolve) => {
-                                    const tryGetFriendsData = (retryNum: number) => {
+                                    const tryGetFriendsData = (tryNum: number) => {
                                         callAPIGetGroups(props, friendId).then((groupsResp) => {
                                             onGroupsDataReceived(props, groupsResp)
                                             resolve({succeed:true})
                                         }).catch((e) => {
+                                            if (e?.cancelled){
+                                                resolve({ cancelled: true })
+                                                return
+                                            }
                                             const errCode = e?.error_data?.error_reason?.error_code
                                             // Error code 6 - "too many requests per second"
                                             if (errCode !== 6){
-                                                if (!KNOWN_ERRORS.findIndex((v) => { return v === errCode })){
+                                                if (KNOWN_ERRORS.findIndex((v) => { return v === errCode }) === -1){
                                                     log(e) 
                                                 }
-                                                props.incCounter('friendsErrorResponse')                                            
+                                                props.incCounter('friendsErrorResponse')
                                                 resolve({ succeed: false, friendId: friendId, error: e.error_data?.error_reason?.error_msg ?? JSON.stringify(e)})
                                                 return
                                             }
                                             // If 10 times failed with "too many requests" error, then stop trying, perhaps there is a new problem.
-                                            if (retryNum >= REQUEST_ATTEMPTS_COUNT_MAX){
+                                            if (tryNum >= REQUEST_ATTEMPTS_COUNT_MAX){
                                                 props.incCounter('attemptsCountExceeded')
                                                 resolve({ succeed: false, friendId: friendId, error: e.error_data?.error_reason?.error_msg ?? JSON.stringify(e)})
                                                 return
                                             }
-                                            tryGetFriendsData(retryNum + 1)
+                                            tryGetFriendsData(tryNum + 1)
                                         })
                                     }
                                     return tryGetFriendsData(0)
@@ -64,21 +69,33 @@ const createVKDataService = () => {
                 })
             })
     }
-    
-    const onFriendsDataReceived = (props: any, response: any) => {
-        let friends = response.items
-        props.incCounter('friendsCount', friends.length)
-        let friendsRequestOffset = 0
-        let res = []
-        while (friendsRequestOffset + FRIENDS_MAX_COUNT_PER_REQUEST < response.count){
-            friendsRequestOffset += FRIENDS_MAX_COUNT_PER_REQUEST
-            let params = {count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: friendsRequestOffset, user_id: props.fetchedUser?.id !== undefined? props.fetchedUser.id: null}
-            const requestId = getRequestId(props.fetchedUser?.id, FRIENDS_GET_REQEST_ID, null, null, friendsRequestOffset)
-            res.push(callAPI(props, FRIENDS_GET_REQEST_ID, requestId, params))
-        }
 
-        res.push(Promise.resolve(response))
-        return res        
+    const onFriendsDataReceived = (props: any, resp: any) => {
+        props.incCounter('friendsCount', resp.response.count)
+        const arr = []
+        if (resp.response.count > FRIENDS_MAX_COUNT_PER_REQUEST){
+            let params = {count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: FRIENDS_MAX_COUNT_PER_REQUEST, user_id: props.fetchedUser?.id !== undefined? props.fetchedUser.id: null}
+            const requestId = getRequestId(props.fetchedUser?.id, FRIENDS_GET_REQEST_ID, null, null, FRIENDS_MAX_COUNT_PER_REQUEST)
+            arr.push(new Promise((resolve, reject) => {
+                const GetMoreFriends = (tryNum: number) => {
+                    callAPI(props, FRIENDS_GET_REQEST_ID, requestId, params)
+                    .then(d => resolve(d))
+                    .catch(e => {
+                        const errCode = e?.error_data?.error_reason?.error_code
+                        if (errCode !== 6 || tryNum >= REQUEST_ATTEMPTS_COUNT_MAX){
+                            log('Non-repeatable error or attempts limit reached, tryNum ' + tryNum)
+                            log(e)
+                            reject(e)
+                            return
+                        }
+                        GetMoreFriends(tryNum + 1)
+                    })
+                }
+                GetMoreFriends(0)
+            }))
+        }
+        arr.push(Promise.resolve(resp))
+        return arr
     }
 
     const onGroupsDataReceived = (props: any, responseData: any) => {
@@ -95,13 +112,12 @@ const createVKDataService = () => {
         }
         props.incCounter('friendsDataReceived')
         const {data, hasMore} = getUpdatedTopData(props.groupsData, props.topDataArr)
-        props.setItems(data)
+        // props.setItems(data)
         props.setTopDataHasMore(hasMore)
     }
     
     let timerCounter = 0
     let scheduledTime_ms = 0
-    // todo: move scheduledTime_ms to state
     const callAPI = (props: any, method: string, requestId: string, params: any, new_scheduledTime_ms: any = null) => { 
         let request = {
             method: method, 
@@ -137,7 +153,7 @@ const createVKDataService = () => {
 
             cancelToken.cancel = () => { 
                 clearTimeout(timeoutId)
-                reject(new Error("Cancelled")) 
+                reject({cancelled: true})
             }
         })
     }

@@ -14,8 +14,6 @@ interface IState{
 	vkDataService?: any,
 	fetchedUser?: any,
 	popOut: ReactElement | null,
-	// todo: remove items, use topDataArr instead
-	items: Array<any>,
 	groupsData: Map<any, any>,
 	topDataArr: Array<any>,
 	topDataHasMore: boolean,
@@ -34,11 +32,9 @@ class App extends React.Component<{}, IState>{
 		let vkDataService = createVKDataService()
 		this.state = {
 			activePanel: 'startScreen',
-			// todo: move out vkDataService from state
 			vkDataService: vkDataService,
 			fetchedUser: null,
 			popOut: null,
-			items: [],
 			groupsData: new Map(),
 			topDataArr: new Array(PAGE_SIZE),
 			topDataHasMore: false,
@@ -67,7 +63,6 @@ class App extends React.Component<{}, IState>{
 			this.setState({
 				token: res[1].access_token,
 				fetchedUser: res[0],
-				popOut: null
 			})
 			this.loadData(this.createChlidProps(res[0], res[1].access_token))
 		}).catch((err: any) => this.onError(err))
@@ -78,7 +73,6 @@ class App extends React.Component<{}, IState>{
 			fetchedUser: user,
 			token: token,
 			timers: this.state.timers,
-			items: this.state.items,
 			topDataArr: this.state.topDataArr,
 			groupsData: this.state.groupsData,
 			setTopDataHasMore: (hasMore: boolean) => {
@@ -87,23 +81,18 @@ class App extends React.Component<{}, IState>{
 				})
 			},
 			incCounter: this.incCounter,
-			setItems: (data: any) => {
+			hideSpinner: () => {
 				this.setState({
-					popOut: null,
-					items: data
+					popOut: null
 				})
 			}
 		}
 	}
 
 	loadData (props: any) {
+		log('started') 
 		this.state.vkDataService.LoadFriendsGroupsData(props).then((_: any) => {
-			const groupsDataArr = Array.from(this.state.groupsData.entries()).sort((a: any, b: any) => { return b[1].friends - a[1].friends }).map((e: any) => { return {value:[e[0], e[1]] }})
-			this.setState({
-				popOut: null,
-				items: groupsDataArr,
-				topDataHasMore: false,
-			})
+			log('finished')
 		}).catch((err: any) => this.onError(err))
 	}
 
@@ -121,7 +110,8 @@ class App extends React.Component<{}, IState>{
 	onError (errorResponse: any) {
 		log(errorResponse)
 		this.setState({
-			error: (errorResponse?.error_data?.error_reason?.error_msg ?? "Произошла ошибка: " + JSON.stringify(errorResponse))
+			error: (errorResponse?.error_data?.error_reason?.error_msg ?? "Произошла ошибка: " + JSON.stringify(errorResponse)),
+			popOut: null
 		})
 	}
 
@@ -133,7 +123,6 @@ class App extends React.Component<{}, IState>{
 		}
 		const {data, hasMore} = this.state.vkDataService.GetUpdatedTopData(this.state.groupsData, this.state.topDataArr)
 		this.setState({
-			items: data,
 			topDataHasMore:hasMore
 		})
 	}
@@ -142,7 +131,6 @@ class App extends React.Component<{}, IState>{
 		this.state.timers.forEach((t: any) => { t.cancel() })
 		this.setState({
 			timers: [],
-			items: [],
 			groupsData: new Map(),
 			topDataArr: new Array(PAGE_SIZE),
 			topDataHasMore: false,
@@ -153,7 +141,7 @@ class App extends React.Component<{}, IState>{
 	changeUser (user: any) {
 		this.setState({
 			fetchedUser: user,
-			popOut: null,
+			popOut: <ScreenSpinner/>,
 			vkDataService: createVKDataService()
 		})
 		this.loadData(this.createChlidProps(user, this.state.token))
@@ -164,7 +152,6 @@ class App extends React.Component<{}, IState>{
 			<View activePanel={this.state.activePanel} popout={this.state.popOut}>
 				<StartScreen id='startScreen' go={() => {
 					this.setState({
-						popOut: <ScreenSpinner/>,
 						activePanel: 'dataScreen'
 					})
 				}}/>
@@ -178,6 +165,11 @@ class App extends React.Component<{}, IState>{
 						this.setState(s)
 					}}
 					incCounter = {this.incCounter}
+					setPopOut = {(popOut: any) => {
+						this.setState({
+							popOut: popOut
+						})
+					}}
 				/>
 			</View>
 		)
