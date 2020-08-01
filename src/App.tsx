@@ -24,7 +24,7 @@ interface IState{
 }
 
 const PAGE_SIZE = 10
-const COUNTERS_ZERO = { requestsSent:0, requestsQueued:0, friendsCount:0, friendsDataReceived:0, attemptsCountExceeded:0, friendsErrorResponse:0 }
+const COUNTERS_ZERO = { requestsSent:0, requestsQueued:0, friendsCount:0, friendsDataReceived:0, attemptsCountExceeded:0, friendsErrorResponse:0, groupsCount:0 }
 class App extends React.Component<{}, IState>{
 	constructor(props: any){
 		super(props)
@@ -47,6 +47,8 @@ class App extends React.Component<{}, IState>{
 		this.createChlidProps = this.createChlidProps.bind(this)
 		this.loadData = this.loadData.bind(this)
 		this.incCounter = this.incCounter.bind(this)
+		this.setCounter = this.setCounter.bind(this)
+		this.changeCounter = this.changeCounter.bind(this)
 		this.onError = this.onError.bind(this)
 		this.incTopCount = this.incTopCount.bind(this)
 		this.cleanState = this.cleanState.bind(this)
@@ -81,6 +83,7 @@ class App extends React.Component<{}, IState>{
 				})
 			},
 			incCounter: this.incCounter,
+			setCounter: this.setCounter,
 			hideSpinner: () => {
 				this.setState({
 					popOut: null
@@ -96,15 +99,25 @@ class App extends React.Component<{}, IState>{
 		}).catch((err: any) => this.onError(err))
 	}
 
-	incCounter (counterName: any, addVal = 1) {
+	changeCounter (counterName: any, addVal = 1, valueFunc: any) {
 		this.setState((state: any) => {
-			let counters = Object.assign({}, state.counters)
-			counters[counterName] = (counters[counterName] ?? 0) + addVal
+			const counters = Object.assign({}, state.counters)
+			counters[counterName] = valueFunc((counters[counterName] ?? 0), addVal)
 			// log(`rS ${counters.requestsSent}, rQ ${counters.requestsQueued}, fC ${counters.friendsCount}, fDR ${counters.friendsDataReceived}, aCE ${counters.attemptsCountExceeded}, fER ${counters.friendsErrorResponse}`)
 			return {
 				counters: counters
 			}
 		})
+	}
+
+	incCounter (counterName: any, addVal = 1) {
+		this.changeCounter(counterName, addVal, 
+			(currentValue: any, passedValue: any) => currentValue + passedValue)
+	}
+
+	setCounter (counterName: any, newVal: number) {
+		this.changeCounter(counterName, newVal,
+			(_: any, passedValue: any) => passedValue)
 	}
 
 	onError (errorResponse: any) {

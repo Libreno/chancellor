@@ -111,6 +111,7 @@ const createVKDataService = () => {
             })
         }
         props.incCounter('friendsDataReceived')
+        props.setCounter('groupsCount', props.groupsData.size)
         const {data, hasMore} = getUpdatedTopData(props.groupsData, props.topDataArr)
         // props.setItems(data)
         props.setTopDataHasMore(hasMore)

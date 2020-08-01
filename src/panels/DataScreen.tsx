@@ -78,7 +78,7 @@ const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeU
 			<PanelHeader>Мои друзья и их сообщества</PanelHeader>
 			<FormLayout>
 				<FormStatus hidden={!parentState.error} header="Ошибка" mode="error">{parentState.error}</FormStatus>
-				<Input type = "text" onChange={(e) => {setUserLink(e.target.value)}}/>
+				<Input type = "text" onChange={(e) => {setUserLink(e.target.value)}} placeholder="Ссылка на страницу пользователя или его ИД"/>
 				<Button stretched size = "xl" onClick={loadUserClick}>Загрузить</Button>
 				{parentState.fetchedUser &&
 				<Group>
@@ -91,7 +91,8 @@ const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeU
 			</FormLayout>
 			<div id='allfriends-progressbar'>
 				<div>
-					Загружено {parentState.counters.friendsDataReceived + parentState.counters.attemptsCountExceeded + parentState.counters.friendsErrorResponse} из {parentState.counters.friendsCount} друзей
+					Загружено {parentState.counters.friendsDataReceived + parentState.counters.attemptsCountExceeded + parentState.counters.friendsErrorResponse} 
+					&nbsp;из {parentState.counters.friendsCount} друзей, {parentState.counters.groupsCount} групп.
 				</div>
 				<div style={progressStyle}>
 					Осталось ~ {Math.round(parentState.timers.length * API_REQUEST_INTERVAL / 60000)} мин.
