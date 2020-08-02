@@ -111,7 +111,7 @@ const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeU
 						>
 						{parentState.topDataArr.map((item: any, i: number) => {
 							return <div className='allfriends-vk-group-card' key={i}>
-										<div className='group-name'>[{item.value[1].friends}]&nbsp;{item.value[1].name}</div>
+										<div className='group-name'>{i + 1}. [{item.value[1].friends}]&nbsp;{item.value[1].name}</div>
 										<div className='group-id'>{item.value[0]}</div>
 									</div>
 						})}
