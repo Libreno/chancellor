@@ -93,7 +93,9 @@ const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeU
 			<div id='allfriends-progressbar'>
 				<div>
 					Загружено {parentState.counters.friendsDataReceived + parentState.counters.attemptsCountExceeded + parentState.counters.friendsErrorResponse} 
-					&nbsp;из {parentState.counters.friendsCount} друзей, {parentState.counters.groupsCount} групп.
+					&nbsp;из {parentState.counters.friendsCount} друзей, 
+					<br/>недоступны данные о {parentState.counters.friendsProfileClosed} пользователях, 
+					<br/>всего групп: {parentState.counters.groupsCount}.
 				</div>
 				<div style={progressStyle}>
 					Осталось ~ {Math.round(parentState.timers.length * API_REQUEST_INTERVAL / 60000)} мин.

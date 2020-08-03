@@ -25,7 +25,7 @@ interface IState{
 }
 
 const PAGE_SIZE = 10
-const COUNTERS_ZERO = { requestsSent:0, requestsQueued:0, friendsCount:0, friendsDataReceived:0, attemptsCountExceeded:0, friendsErrorResponse:0, groupsCount:0 }
+const COUNTERS_ZERO = { requestsSent:0, requestsQueued:0, friendsCount:0, friendsDataReceived:0, attemptsCountExceeded:0, friendsErrorResponse:0, friendsProfileClosed:0, groupsCount:0 }
 class App extends React.Component<{}, IState>{
 	constructor(props: any){
 		super(props)
@@ -89,14 +89,15 @@ class App extends React.Component<{}, IState>{
 				this.setState({
 					popOut: null
 				})
-			}
+			},
+			onError: this.onError
 		}
 	}
 
 	loadData (props: any) {
-		log('started') 
+		log('Allfriends started.') 
 		this.state.vkDataService.LoadFriendsGroupsData(props).then((_: any) => {
-			log('finished')
+			log('Allfriends finished.')
 		}).catch((err: any) => this.onError(err))
 	}
 

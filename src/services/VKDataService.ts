@@ -1,6 +1,6 @@
 // Copyright © 2020, Farkhad Muminov. All rights reserved.
 import bridge from "@vkontakte/vk-bridge"
-import log from "../logger"
+import log, { warn } from "../logger"
 
 const APP_ID = 7505513
 const APP_SCOPE = "friends, docs"
@@ -11,7 +11,10 @@ const USERS_GET_REQEST_ID = "users.get"
 const FRIENDS_MAX_COUNT_PER_REQUEST = 5000
 const REQUEST_ATTEMPTS_COUNT_MAX = 9
 const API_REQUEST_INTERVAL = 350
-const KNOWN_ERRORS = [30, 7, 18, 29]
+const RATE_LIMIT_REACHED_ERROR = 29
+const DELETED_OR_CLOSED_ERRORS = [30, 7, 18]
+
+const KNOWN_ERRORS = DELETED_OR_CLOSED_ERRORS.concat(RATE_LIMIT_REACHED_ERROR)
 
 const createVKDataService = () => {
     const loadFriendsGroupsData = (props: any): Promise<Array<any>> => {
@@ -43,6 +46,9 @@ const createVKDataService = () => {
                                                 if (KNOWN_ERRORS.findIndex((v) => { return v === errCode }) === -1){
                                                     log(e) 
                                                 }
+                                                if (DELETED_OR_CLOSED_ERRORS.findIndex((v) => { return v === errCode }) !== -1){
+                                                    props.incCounter('friendsProfileClosed')
+                                                }
                                                 props.incCounter('friendsErrorResponse')
                                                 resolve({ succeed: false, friendId: friendId, error: e.error_data?.error_reason?.error_msg ?? JSON.stringify(e)})
                                                 return
@@ -67,6 +73,9 @@ const createVKDataService = () => {
                             resolve(_)
                         })
                     })
+                })
+                .catch(e => {
+                    props.onError(e)
                 })
             })
     }
@@ -138,16 +147,18 @@ const createVKDataService = () => {
                 // log(request)
                 props.incCounter('requestsSent')
                 bridge.send("VKWebAppCallAPIMethod", request).then(data => {
+                    resolve(data)
+                }).catch(e => reject(e))
+                .finally(() => {
                     const ind = props.timers.findIndex((t:any) => t.id === cancelToken.id)
                     if (ind !== -1){
                         props.timers.splice(ind, 1)
                         // log('timer ' + cancelToken.id + ' was removed from schedule')
                     }
                     else {
-                        // warn('Warning: timer ' + cancelToken.id + ' was not found in schedule.timers')
+                        warn('Warning: timer ' + cancelToken.id + ' was not found in schedule.timers')
                     }
-                    resolve(data)
-                }).catch(e => reject(e))
+                })
             }, timeout)
             // log(`wait ${timeout} ms`)
             props.incCounter('requestsQueued')
