@@ -1,4 +1,4 @@
-// Copyright © 2020 Farkhad Muminov. All rights reserved.
+// Copyright © 2020, Farkhad Muminov. All rights reserved.
 const consolewrite = (write: any) => {
     return (message: any) => {
         var today = new Date()

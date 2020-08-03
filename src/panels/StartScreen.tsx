@@ -1,4 +1,4 @@
-// Copyright © 2020 Farkhad Muminov. All rights reserved.
+// Copyright © 2020, Farkhad Muminov. All rights reserved.
 import React from 'react'
 import Panel from '@vkontakte/vkui/dist/components/Panel/Panel'
 import Button from '@vkontakte/vkui/dist/components/Button/Button'

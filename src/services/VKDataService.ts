@@ -1,4 +1,4 @@
-// Copyright © 2020 Farkhad Muminov. All rights reserved.
+// Copyright © 2020, Farkhad Muminov. All rights reserved.
 import bridge from "@vkontakte/vk-bridge"
 import log from "../logger"
 

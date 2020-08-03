@@ -1,3 +1,4 @@
+// Copyright © 2020, Farkhad Muminov. All rights reserved.
 import "core-js/features/map"
 import "core-js/features/set"
 import React from "react"
