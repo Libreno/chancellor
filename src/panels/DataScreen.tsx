@@ -79,7 +79,7 @@ const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeU
 			<PanelHeader>Мои друзья и их сообщества</PanelHeader>
 			<FormLayout>
 				<FormStatus hidden={!parentState.error} header="Ошибка" mode="error">{parentState.error}</FormStatus>
-				<Input type = "text" onChange={(e) => {setUserLink(e.target.value)}} placeholder="Ссылка на страницу пользователя или его ИД"/>
+				<Input type = "text" onChange={(e) => {setUserLink(e.target.value)}} placeholder="Адрес страницы или ИД пользователя"/>
 				<Button stretched size = "xl" onClick={loadUserClick}>Загрузить</Button>
 				{parentState.fetchedUser &&
 				<Group>
