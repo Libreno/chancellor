@@ -166,6 +166,7 @@ class App extends React.Component<{}, IState>{
 			<View activePanel={this.state.activePanel} popout={this.state.popOut}>
 				<StartScreen id='startScreen' go={() => {
 					this.setState({
+						popOut: this.state.counters.friendsCount === 0? <ScreenSpinner/> : null,
 						activePanel: 'dataScreen'
 					})
 				}}/>
