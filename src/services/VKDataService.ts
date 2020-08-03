@@ -113,8 +113,7 @@ const createVKDataService = () => {
         }
         props.incCounter('friendsDataReceived')
         props.setCounter('groupsCount', props.groupsData.size)
-        const {data, hasMore} = getUpdatedTopData(props.groupsData, props.topDataArr)
-        // props.setItems(data)
+        const hasMore = updateTopData(props.groupsData, props.topDataArr)
         props.setTopDataHasMore(hasMore)
     }
     
@@ -176,7 +175,7 @@ const createVKDataService = () => {
     }
 
     const topDataKeys = new Set()
-    const getUpdatedTopData = (groupsData: Map<any, any>, topDataArr: Array<any>): any => {
+    const updateTopData = (groupsData: Map<any, any>, topDataArr: Array<any>): any => {
         let i = 0
         const ent = groupsData.entries()
         const topDataMaxNum = topDataArr.length - 1
@@ -215,7 +214,7 @@ const createVKDataService = () => {
                 topDataArr.sort((a: any, b: any) => { if (b === undefined){ return -1} if (a === undefined){ return 1} return b.value[1].friends - a.value[1].friends })
             }
         }
-        return {data: topDataArr.slice(), hasMore: groupsData.size > topDataMaxNum + 1}
+        return groupsData.size > topDataMaxNum + 1
     }
 
     return {
@@ -226,7 +225,7 @@ const createVKDataService = () => {
 			])
         },
         LoadFriendsGroupsData: loadFriendsGroupsData,
-        GetUpdatedTopData: getUpdatedTopData,
+        UpdateTopData: updateTopData,
         GetUser: getUser
     }
 }

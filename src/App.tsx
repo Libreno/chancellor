@@ -135,7 +135,7 @@ class App extends React.Component<{}, IState>{
 		while(i++ < addLength){
 			this.state.topDataArr.push(undefined)
 		}
-		const {data, hasMore} = this.state.vkDataService.GetUpdatedTopData(this.state.groupsData, this.state.topDataArr)
+		const hasMore = this.state.vkDataService.UpdateTopData(this.state.groupsData, this.state.topDataArr)
 		this.setState({
 			topDataHasMore:hasMore
 		})
