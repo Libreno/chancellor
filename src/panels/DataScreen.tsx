@@ -1,3 +1,4 @@
+// Copyright © 2020 Farkhad Muminov. All rights reserved.
 import React, {useState} from 'react'
 import Panel from '@vkontakte/vkui/dist/components/Panel/Panel'
 import Alert from '@vkontakte/vkui/dist/components/Alert/Alert'

@@ -1,3 +1,4 @@
+// Copyright © 2020 Farkhad Muminov. All rights reserved.
 import React, { ReactElement } from 'react'
 import View from '@vkontakte/vkui/dist/components/View/View'
 import ScreenSpinner from '@vkontakte/vkui/dist/components/ScreenSpinner/ScreenSpinner'
