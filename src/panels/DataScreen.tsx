@@ -11,7 +11,7 @@ import Input from '@vkontakte/vkui/dist/components/Input/Input'
 import FormLayout from '@vkontakte/vkui/dist/components/FormLayout/FormLayout'
 import FormStatus from '@vkontakte/vkui/dist/components/FormStatus/FormStatus'
 import Avatar from '@vkontakte/vkui/dist/components/Avatar/Avatar'
-import { List, ScreenSpinner } from '@vkontakte/vkui'
+import { Link, List, ScreenSpinner } from '@vkontakte/vkui'
 import InfiniteScroll from 'react-infinite-scroll-component'
 // import log from '../logger'
 import '../styles/style.css'
@@ -20,7 +20,8 @@ import { API_REQUEST_INTERVAL } from "../services/VKDataService"
 const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeUser, setPopOut, setParentState, incCounter }: any) => {
 	const [userLink, setUserLink] = useState('')
 	const [loadedUser, setLoadedUser] = useState('')
-
+	const IS_MVK = window.location.href.indexOf('vk_platform=mobile_web') !== -1;
+	
 	const loadUserClick = () => {
 		if (userLink === "" || loadedUser === userLink){
 			return
@@ -66,8 +67,9 @@ const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeU
 		})
 	}
 
+	const hasScrollBar = ((document.getElementById('dataScreen')?.clientHeight ?? 0) < (document.getElementById('allfriends-groups-list')?.clientHeight ?? 0))
 	const buttonMoreStyle = {
-		display: ((document.getElementById('dataScreen')?.clientHeight ?? 0) < (document.getElementById('allfriends-groups-list')?.clientHeight ?? 0)) || !parentState.topDataHasMore? 'none': 'block'
+		display: hasScrollBar || !parentState.topDataHasMore? 'none': 'block'
 	}
 
 	const progressStyle = {
@@ -120,8 +122,7 @@ const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeU
 						>
 						{parentState.topDataArr.map((item: any, i: number) => {
 							return <div className='allfriends-vk-group-card' key={i}>
-										<div className='group-name'>{i + 1}. [{item.value[1].friends}]&nbsp;{item.value[1].name}</div>
-										<div className='group-id'>{item.value[0]}</div>
+										<div className='group-name'>{i + 1}. [{item.value[1].friends}]&nbsp;<Link href={`https://${IS_MVK?'m.':''}vk.com/${item.value[0]}`}>{item.value[1].name}</Link></div>
 									</div>
 						})}
 					</InfiniteScroll>
