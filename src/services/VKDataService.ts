@@ -3,7 +3,7 @@ import bridge from "@vkontakte/vk-bridge"
 import log, { warn } from "../logger"
 
 const APP_ID = 7505513
-const APP_SCOPE = "friends, docs"
+const APP_SCOPE = "friends"
 const API_VERSION = "5.110"
 const FRIENDS_GET_REQEST_ID = "friends.get"
 const GROUPS_GET_REQEST_ID = "groups.get"
@@ -19,7 +19,6 @@ const KNOWN_ERRORS = DELETED_OR_CLOSED_ERRORS.concat(RATE_LIMIT_REACHED_ERROR)
 const createVKDataService = () => {
     const loadFriendsGroupsData = (props: any): Promise<Array<any>> => {
         return new Promise((resolve) => {
-            // let friendNum = 0
             let params = { user_id: props.fetchedUser.id, count: FRIENDS_MAX_COUNT_PER_REQUEST }
             callAPI(props, "friends.get", getRequestId(props.fetchedUser?.id, FRIENDS_GET_REQEST_ID, null), params)
                 .then((resp: any) => {
