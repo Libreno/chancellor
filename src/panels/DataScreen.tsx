@@ -78,7 +78,7 @@ const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeU
 
 	return (
 		<Panel id={id}>
-			<PanelHeader>Мои друзья и их сообщества</PanelHeader>
+			<PanelHeader>Мои друзья и их группы</PanelHeader>
 			<FormLayout>
 				<FormStatus hidden={!parentState.error} header="Ошибка" mode="error">{parentState.error}</FormStatus>
 				<Input type = "text" onChange={(e) => {setUserLink(e.target.value)}} placeholder="Адрес страницы или ИД пользователя"/>

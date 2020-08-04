@@ -8,7 +8,7 @@ import { PanelHeader } from '@vkontakte/vkui'
 const StartScreen = ({id, go}: any) => {
     return (
         <Panel id={id}>
-            <PanelHeader>Мои друзья и их сообщества</PanelHeader>
+            <PanelHeader>Мои друзья и их группы</PanelHeader>
             <div id='allfriends-start-screen'>
                 <div className="paragraph">Приветствую Вас, дорогой Пользователь и спасибо, что открыли приложение! Расскажу кратко о том, как им пользоваться,
                 чем оно может быть для Вас полезным и другую интересную информацию:</div>
