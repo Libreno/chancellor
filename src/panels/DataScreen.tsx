@@ -80,15 +80,21 @@ const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeU
 			<FormLayout>
 				<FormStatus hidden={!parentState.error} header="Ошибка" mode="error">{parentState.error}</FormStatus>
 				<Input type = "text" onChange={(e) => {setUserLink(e.target.value)}} placeholder="Адрес страницы или ИД пользователя"/>
-				<Button stretched size = "xl" onClick={loadUserClick}>Загрузить</Button>
+				
 				{parentState.fetchedUser &&
-				<Group>
-					<Cell
-						before={parentState.fetchedUser.photo_200 ? <Avatar src={parentState.fetchedUser.photo_200}/> : null}
-						description={parentState.fetchedUser.city && parentState.fetchedUser.city.title ? parentState.fetchedUser.city.title : ''}>
-						{`${parentState.fetchedUser.first_name} ${parentState.fetchedUser.last_name}`}
-					</Cell>
-				</Group>}
+				<table><tbody><tr>
+					<td>
+						<Button size = "m" onClick={loadUserClick}>Загрузить&nbsp;=&gt;</Button>
+					</td>
+					<td>
+						<Cell
+							before={parentState.fetchedUser.photo_200 ? <Avatar src={parentState.fetchedUser.photo_200}/> : null}
+							description={parentState.fetchedUser.city && parentState.fetchedUser.city.title ? parentState.fetchedUser.city.title : ''}>
+							{`${parentState.fetchedUser.first_name} ${parentState.fetchedUser.last_name}`}
+						</Cell>
+					</td>
+				</tr></tbody></table>
+				}
 			</FormLayout>
 			<div id='allfriends-progressbar'>
 				<div>
