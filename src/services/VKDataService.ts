@@ -5,9 +5,9 @@ import log, { warn } from "../logger"
 const APP_ID = 7505513
 const APP_SCOPE = "friends"
 const API_VERSION = "5.110"
-const FRIENDS_GET_REQEST_ID = "friends.get"
-const GROUPS_GET_REQEST_ID = "groups.get"
-const USERS_GET_REQEST_ID = "users.get"
+const FRIENDS_GET_METHOD_NAME = "friends.get"
+const GROUPS_GET_MOTHOD_NAME = "groups.get"
+const USERS_GET_METHOD_NAME = "users.get"
 const FRIENDS_MAX_COUNT_PER_REQUEST = 5000
 const REQUEST_ATTEMPTS_COUNT_MAX = 9
 const API_REQUEST_INTERVAL = 350
@@ -34,7 +34,7 @@ class VKDataService implements IVKDataService{
 
     async getFriends(props: any) {
         let params = { user_id: props.fetchedUser.id, count: FRIENDS_MAX_COUNT_PER_REQUEST }
-        const resp = await this.callAPI_(props, "friends.get", this.getRequestId_(props.fetchedUser?.id, FRIENDS_GET_REQEST_ID, null), params)
+        const resp = await this.callAPI_(props, FRIENDS_GET_METHOD_NAME, this.getRequestId_(props.fetchedUser?.id, FRIENDS_GET_METHOD_NAME, null), params)
         return this.onFriendsDataReceived_(props, resp)
     }
 
@@ -75,10 +75,10 @@ class VKDataService implements IVKDataService{
         const arr = [Promise.resolve(resp)]
         if (resp.response.count > FRIENDS_MAX_COUNT_PER_REQUEST){
             let params = {count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: FRIENDS_MAX_COUNT_PER_REQUEST, user_id: props.fetchedUser?.id !== undefined? props.fetchedUser.id: null}
-            const requestId = this.getRequestId_(props.fetchedUser?.id, FRIENDS_GET_REQEST_ID, null, null, FRIENDS_MAX_COUNT_PER_REQUEST)
+            const requestId = this.getRequestId_(props.fetchedUser?.id, FRIENDS_GET_METHOD_NAME, null, null, FRIENDS_MAX_COUNT_PER_REQUEST)
             arr.push(new Promise((resolve, reject) => {
                 const GetMoreFriends = (tryNum: number) => {
-                    this.callAPI_(props, props.timers, FRIENDS_GET_REQEST_ID, requestId, params)
+                    this.callAPI_(props, FRIENDS_GET_METHOD_NAME, requestId, params)
                     .then(d => resolve(d))
                     .catch(e => {
                         const errCode = e?.error_data?.error_reason?.error_code
@@ -161,7 +161,7 @@ class VKDataService implements IVKDataService{
     }
 
     callAPIGetGroups_(props:any, friendId: number) { 
-        return this.callAPI_(props, GROUPS_GET_REQEST_ID, this.getRequestId_(props.fetchedUser?.id, GROUPS_GET_REQEST_ID, friendId, 1), {
+        return this.callAPI_(props, GROUPS_GET_MOTHOD_NAME, this.getRequestId_(props.fetchedUser?.id, GROUPS_GET_MOTHOD_NAME, friendId, 1), {
             user_id: friendId,
             extended: 1
         })
@@ -173,7 +173,7 @@ class VKDataService implements IVKDataService{
     
     getUser(token: string, timers: any, incCounter: any, userName: string) {
         return this.callAPI_({token: token, timers: timers, incCounter: incCounter}, 
-            "users.get", this.getRequestId_(null, USERS_GET_REQEST_ID), 
+            "users.get", this.getRequestId_(null, USERS_GET_METHOD_NAME), 
             { user_ids: userName, fields: "photo_200, city, nickname"}, 0)
     }
 
