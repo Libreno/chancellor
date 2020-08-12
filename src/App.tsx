@@ -3,16 +3,16 @@ import React, { ReactElement } from 'react'
 import View from '@vkontakte/vkui/dist/components/View/View'
 import ScreenSpinner from '@vkontakte/vkui/dist/components/ScreenSpinner/ScreenSpinner'
 import '@vkontakte/vkui/dist/vkui.css'
-import createVKDataService from "./services/VKDataService"
 import bridge from "@vkontakte/vk-bridge"
 import log from "./logger"
 
 import StartScreen from "./panels/StartScreen"
 import DataScreen from './panels/DataScreen'
+import VKDataService, { IVKDataService } from './services/VKDataService'
 
 interface IState{
 	activePanel: string,
-	vkDataService?: any,
+	vkDataService: IVKDataService,
 	fetchedUser?: any,
 	popOut: ReactElement | null,
 	groupsData: Map<any, any>,
@@ -30,7 +30,7 @@ class App extends React.Component<{}, IState>{
 	constructor(props: any){
 		super(props)
 
-		let vkDataService = createVKDataService()
+		let vkDataService = new VKDataService()
 		this.state = {
 			activePanel: 'startScreen',
 			vkDataService: vkDataService,
@@ -62,7 +62,7 @@ class App extends React.Component<{}, IState>{
 				document.body.attributes.setNamedItem(schemeAttribute)
 			}
 		})
-		vkDataService.LoadInitialData().then((res: any) => {
+		vkDataService.loadInitialData().then((res: any) => {
 			this.setState({
 				token: res[1].access_token,
 				fetchedUser: res[0],
@@ -85,20 +85,26 @@ class App extends React.Component<{}, IState>{
 			},
 			incCounter: this.incCounter,
 			setCounter: this.setCounter,
-			hideSpinner: () => {
-				this.setState({
-					popOut: null
-				})
-			},
 			onError: this.onError
 		}
 	}
 
-	loadData (props: any) {
-		log('Allfriends started.') 
-		this.state.vkDataService.LoadFriendsGroupsData(props).then((_: any) => {
-			log('Allfriends finished.')
-		}).catch((err: any) => this.onError(err))
+	async loadData(props: any) {
+		try{
+			const friendsDataArr = await this.state.vkDataService.getFriends(props);//.then((friendsDataArr: any) => {
+			this.setState({
+				popOut: null
+			});
+			friendsDataArr.forEach(async (friendsRespPromise: Promise<any>) => {
+				const friendsResp = await friendsRespPromise;
+				friendsResp.response.items.forEach(async (friendId: number) => {
+					await this.state.vkDataService.handleFriend(props, friendId)
+				});
+			})
+		}
+		catch(err){
+			this.onError(err)
+		}
 	}
 
 	changeCounter (counterName: any, addVal = 1, valueFunc: any) {
@@ -136,7 +142,7 @@ class App extends React.Component<{}, IState>{
 		while(i++ < addLength){
 			this.state.topDataArr.push(undefined)
 		}
-		const hasMore = this.state.vkDataService.UpdateTopData(this.state.groupsData, this.state.topDataArr)
+		const hasMore = this.state.vkDataService.updateTopData_(this.state.groupsData, this.state.topDataArr)
 		this.setState({
 			topDataHasMore:hasMore
 		})
@@ -157,7 +163,7 @@ class App extends React.Component<{}, IState>{
 		this.setState({
 			fetchedUser: user,
 			popOut: <ScreenSpinner/>,
-			vkDataService: createVKDataService()
+			vkDataService: new VKDataService()
 		})
 		this.loadData(this.createChlidProps(user, this.state.token))
 	}

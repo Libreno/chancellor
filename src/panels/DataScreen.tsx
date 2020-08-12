@@ -55,7 +55,7 @@ const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeU
 	const loadUser = (userName: any) => {
 		setPopOut(<ScreenSpinner/>)
 		cleanState()
-		parentState.vkDataService.GetUser(parentState.token, parentState.timers, incCounter, userName).then((userResponse: any) => {
+		parentState.vkDataService.getUser(parentState.token, parentState.timers, incCounter, userName).then((userResponse: any) => {
 			setParentState({
 				error: null
 			})
