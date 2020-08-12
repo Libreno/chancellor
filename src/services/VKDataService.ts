@@ -18,9 +18,8 @@ const KNOWN_ERRORS = DELETED_OR_CLOSED_ERRORS.concat(RATE_LIMIT_REACHED_ERROR)
 
 interface IVKDataService{
     loadInitialData: () => Promise<[UserInfo, { access_token: string; scope: string}]>,
-    // loadFriendsGroupsData: loadFriendsGroupsData,
-    updateTopData_: (groupsData: Map<any, any>, topDataArr: Array<any>) => boolean
-    getUser_: (token: string, timers: any, incCounter: any, userName: string) => Promise<unknown>
+    updateTopData: (groupsData: Map<any, any>, topDataArr: Array<any>) => boolean
+    getUser: (token: string, timers: any, incCounter: any, userName: string) => Promise<unknown>
     getFriends: (props: any) => Promise<Promise<any>[]>,
     handleFriend: (props: any, friendId: number) => Promise<unknown>
 }
@@ -112,7 +111,7 @@ class VKDataService implements IVKDataService{
         }
         props.incCounter('friendsDataReceived')
         props.setCounter('groupsCount', props.groupsData.size)
-        const hasMore = this.updateTopData_(props.groupsData, props.topDataArr)
+        const hasMore = this.updateTopData(props.groupsData, props.topDataArr)
         props.setTopDataHasMore(hasMore)
     }
     
@@ -172,14 +171,14 @@ class VKDataService implements IVKDataService{
         return `{"method":"${method}", "profileUserId":"${fetchedUserid}", "user_id":"${user_id? user_id : fetchedUserid}", "extended":"${extended}", "offset":"${offset}"}`
     }
     
-    getUser_(token: string, timers: any, incCounter: any, userName: string) {
+    getUser(token: string, timers: any, incCounter: any, userName: string) {
         return this.callAPI_({token: token, timers: timers, incCounter: incCounter}, 
             "users.get", this.getRequestId_(null, USERS_GET_REQEST_ID), 
             { user_ids: userName, fields: "photo_200, city, nickname"}, 0)
     }
 
     topDataKeys = new Set()
-    updateTopData_(groupsData: Map<any, any>, topDataArr: Array<any>): boolean {
+    updateTopData(groupsData: Map<any, any>, topDataArr: Array<any>): boolean {
         let i = 0
         const ent = groupsData.entries()
         const topDataMaxNum = topDataArr.length - 1

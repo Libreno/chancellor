@@ -91,7 +91,7 @@ class App extends React.Component<{}, IState>{
 
 	async loadData(props: any) {
 		try{
-			const friendsDataArr = await this.state.vkDataService.getFriends(props);//.then((friendsDataArr: any) => {
+			const friendsDataArr = await this.state.vkDataService.getFriends(props);
 			this.setState({
 				popOut: null
 			});
@@ -142,7 +142,7 @@ class App extends React.Component<{}, IState>{
 		while(i++ < addLength){
 			this.state.topDataArr.push(undefined)
 		}
-		const hasMore = this.state.vkDataService.updateTopData_(this.state.groupsData, this.state.topDataArr)
+		const hasMore = this.state.vkDataService.updateTopData(this.state.groupsData, this.state.topDataArr)
 		this.setState({
 			topDataHasMore:hasMore
 		})
