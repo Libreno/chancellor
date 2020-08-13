@@ -17,7 +17,7 @@ import InfiniteScroll from 'react-infinite-scroll-component'
 import '../styles/style.css'
 import { API_REQUEST_INTERVAL } from "../services/VKDataService"
 
-const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeUser, setPopOut, setParentState }: any) => {
+const DataScreen = ({ id, parentState, vkDataService, incTopCount, onError, cleanState, changeUser, setPopOut, setParentState }: any) => {
   const [userLink, setUserLink] = useState('')
   const [loadedUser, setLoadedUser] = useState('')
   const IS_MVK = window.location.href.indexOf('vk_platform=mobile_web') !== -1;
@@ -55,7 +55,7 @@ const DataScreen = ({ id, parentState, incTopCount, onError, cleanState, changeU
   const loadUser = (userName: any) => {
     setPopOut(<ScreenSpinner/>)
     cleanState()
-    parentState.vkDataService.getUser(parentState.token, parentState.timers, userName).then((userResponse: any) => {
+    vkDataService.getUser(parentState.token, parentState.timers, userName).then((userResponse: any) => {
       setParentState({
         error: null
       })

@@ -8,12 +8,11 @@ import log from "./logger"
 
 import StartScreen from "./panels/StartScreen"
 import DataScreen from './panels/DataScreen'
-import VKDataService, { IVKDataService } from './services/VKDataService'
+import VKDataService from './services/VKDataService'
 import AFState from './services/AFState'
 
 interface IState{
   activePanel: string,
-  vkDataService: IVKDataService,
   fetchedUser?: any,
   popOut: ReactElement | null,
   groupsData: Map<any, any>,
@@ -30,13 +29,12 @@ const COUNTERS_ZERO = { requestsSent:0, requestsQueued:0, friendsCount:0, friend
 class App extends React.Component<{}, IState>{
 
   allFriendsState = new AFState((st: any) => this.setState(st), (func: any) => {this.setState(func)})
+  vkDataService = new VKDataService(this.allFriendsState)
   constructor(props: any){
     super(props)
 
-    let vkDataService = new VKDataService(this.allFriendsState)
     this.state = {
       activePanel: 'startScreen',
-      vkDataService: vkDataService,
       fetchedUser: null,
       popOut: null,
       groupsData: new Map(),
@@ -48,7 +46,7 @@ class App extends React.Component<{}, IState>{
       error: null
     }
     this.createChlidProps = this.createChlidProps.bind(this)
-    this.loadData = this.loadData.bind(this)
+    this.loadMainData = this.loadMainData.bind(this)
     this.onError = this.onError.bind(this)
     this.incTopCount = this.incTopCount.bind(this)
     this.cleanState = this.cleanState.bind(this)
@@ -60,17 +58,18 @@ class App extends React.Component<{}, IState>{
         schemeAttribute.value = data.scheme ? data.scheme : 'client_light'
         document.body.attributes.setNamedItem(schemeAttribute)
       }
-    })
-    vkDataService.loadInitialData().then((res: any) => {
+    });
+    this.vkDataService.loadInitialData().then((res: any) => {
       this.setState({
         token: res[1].access_token,
         fetchedUser: res[0],
       })
-      this.loadData(this.createChlidProps(res[0], res[1].access_token))
+      const childProps = this.createChlidProps(res[0], res[1].access_token);
+      this.loadMainData(childProps);
     }).catch((err: any) => this.onError(err))
   }
 
-  createChlidProps (user: any, token: string | null) {
+  createChlidProps(user: any, token: string | null) {
     return {
       fetchedUser: user,
       token: token,
@@ -80,25 +79,20 @@ class App extends React.Component<{}, IState>{
     }
   }
 
-  async loadData(props: any) {
-    try{
-      const friendsDataArr = await this.state.vkDataService.getFriends(props);
-      this.setState({
-        popOut: null
+  async loadMainData(props: any) {
+    const friendsDataArr = await this.vkDataService.getFriends(props);
+    this.setState({
+      popOut: null
+    });
+    friendsDataArr.forEach(async (friendsRespPromise: Promise<any>) => {
+      const friendsResp = await friendsRespPromise;
+      friendsResp.response.items.forEach(async (friendId: number) => {
+        await this.vkDataService.handleFriend(props, friendId)
       });
-      friendsDataArr.forEach(async (friendsRespPromise: Promise<any>) => {
-        const friendsResp = await friendsRespPromise;
-        friendsResp.response.items.forEach(async (friendId: number) => {
-          await this.state.vkDataService.handleFriend(props, friendId)
-        });
-      })
-    }
-    catch(err){
-      this.onError(err)
-    }
+    })
   }
 
-  onError (errorResponse: any) {
+  onError(errorResponse: any) {
     log(errorResponse)
     this.setState({
       error: (errorResponse?.error_data?.error_reason?.error_msg ?? "Произошла ошибка: " + JSON.stringify(errorResponse)),
@@ -106,19 +100,19 @@ class App extends React.Component<{}, IState>{
     })
   }
 
-  incTopCount () {
+  incTopCount() {
     const addLength = Math.min(this.state.groupsData.size, this.state.topDataArr.length + PAGE_SIZE) - this.state.topDataArr.length
     let i = 0
     while(i++ < addLength){
       this.state.topDataArr.push(undefined)
     }
-    const hasMore = this.state.vkDataService.updateTopData(this.state.groupsData, this.state.topDataArr)
+    const hasMore = this.vkDataService.updateTopData(this.state.groupsData, this.state.topDataArr)
     this.setState({
       topDataHasMore:hasMore
     })
   }
 
-  cleanState () {
+  cleanState() {
     this.state.timers.forEach((t: any) => { t.cancel() })
     this.setState({
       timers: [],
@@ -129,13 +123,13 @@ class App extends React.Component<{}, IState>{
     })
   }
 
-  changeUser (user: any) {
+  changeUser(user: any) {
     this.setState({
       fetchedUser: user,
       popOut: <ScreenSpinner/>,
-      vkDataService: new VKDataService(this.allFriendsState)
     })
-    this.loadData(this.createChlidProps(user, this.state.token))
+    this.vkDataService = new VKDataService(this.allFriendsState);
+    this.loadMainData(this.createChlidProps(user, this.state.token));
   }
 
   render() { 
@@ -149,6 +143,7 @@ class App extends React.Component<{}, IState>{
         }}/>
         <DataScreen id='dataScreen'
           parentState = {this.state}
+          vkDataService = {this.vkDataService}
           incTopCount = {this.incTopCount} 
           onError = {this.onError}
           cleanState = {this.cleanState}
