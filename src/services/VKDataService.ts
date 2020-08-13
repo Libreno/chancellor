@@ -1,6 +1,7 @@
 // Copyright © 2020, Farkhad Muminov. All rights reserved.
 import bridge, { UserInfo } from "@vkontakte/vk-bridge"
 import log, { warn } from "../logger"
+import { IAFState } from "./AFState"
 
 const APP_ID = 7505513
 const APP_SCOPE = "friends"
@@ -25,6 +26,12 @@ interface IVKDataService{
 }
 
 class VKDataService implements IVKDataService{
+
+  state: IAFState;
+  constructor(state: IAFState){
+    this.state = state;
+  }
+
   loadInitialData() {
     return Promise.all([
       bridge.send('VKWebAppGetUserInfo'),
@@ -54,14 +61,14 @@ class VKDataService implements IVKDataService{
             log(e) 
           }
           if (DELETED_OR_CLOSED_ERRORS.findIndex((v) => { return v === errCode }) !== -1){
-            props.incCounter('friendsProfileClosed')
+            this.state.incCounter('friendsProfileClosed', 1)
           }
-          props.incCounter('friendsErrorResponse')
+          this.state.incCounter('friendsErrorResponse', 1)
           return { succeed: false, friendId: friendId, error: e.error_data?.error_reason?.error_msg ?? JSON.stringify(e)}
         }
         // If 10 times failed with "too many requests" error, then stop trying, perhaps there is a new problem.
         if (tryNum >= REQUEST_ATTEMPTS_COUNT_MAX){
-          props.incCounter('attemptsCountExceeded')
+          this.state.incCounter('attemptsCountExceeded', 1)
           return { succeed: false, friendId: friendId, error: e.error_data?.error_reason?.error_msg ?? JSON.stringify(e)}
         }
         tryGetFriendsData(tryNum + 1)
@@ -71,7 +78,7 @@ class VKDataService implements IVKDataService{
   }
 
   onFriendsDataReceived_ (props: any, resp: any) {
-    props.incCounter('friendsCount', resp.response.count)
+    this.state.incCounter('friendsCount', resp.response.count)
     const arr = [Promise.resolve(resp)]
     if (resp.response.count > FRIENDS_MAX_COUNT_PER_REQUEST){
       let params = {count: FRIENDS_MAX_COUNT_PER_REQUEST, offset: FRIENDS_MAX_COUNT_PER_REQUEST, user_id: props.fetchedUser?.id !== undefined? props.fetchedUser.id: null}
@@ -109,10 +116,10 @@ class VKDataService implements IVKDataService{
         }
       })
     }
-    props.incCounter('friendsDataReceived')
-    props.setCounter('groupsCount', props.groupsData.size)
+    this.state.incCounter('friendsDataReceived', 1)
+    this.state.setCounter('groupsCount', props.groupsData.size)
     const hasMore = this.updateTopData(props.groupsData, props.topDataArr)
-    props.setTopDataHasMore(hasMore)
+    this.state.setTopDataHasMore(hasMore)
   }
   
   timerCounter = 0
@@ -134,7 +141,7 @@ class VKDataService implements IVKDataService{
       props.timers.push(cancelToken)
       const timeoutId = setTimeout(() => {
         // log(request)
-        props.incCounter('requestsSent')
+        this.state.incCounter('requestsSent', 1)
         bridge.send("VKWebAppCallAPIMethod", request).then(data => {
           // log(data)
           resolve(data)
@@ -151,7 +158,7 @@ class VKDataService implements IVKDataService{
         })
       }, timeout)
       // log(`wait ${timeout} ms`)
-      props.incCounter('requestsQueued')
+      this.state.incCounter('requestsQueued', 1)
 
       cancelToken.cancel = () => { 
         clearTimeout(timeoutId)
@@ -171,8 +178,8 @@ class VKDataService implements IVKDataService{
     return `{"method":"${method}", "profileUserId":"${fetchedUserid}", "user_id":"${user_id? user_id : fetchedUserid}", "extended":"${extended}", "offset":"${offset}"}`
   }
   
-  getUser(token: string, timers: any, incCounter: any, userName: string) {
-    return this.callAPI_({token: token, timers: timers, incCounter: incCounter}, 
+  getUser(token: string, timers: any, userName: string) {
+    return this.callAPI_({token: token, timers: timers},
       "users.get", this.getRequestId_(null, USERS_GET_METHOD_NAME), 
       { user_ids: userName, fields: "photo_200, city, nickname"}, 0)
   }

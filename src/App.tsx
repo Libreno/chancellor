@@ -9,6 +9,7 @@ import log from "./logger"
 import StartScreen from "./panels/StartScreen"
 import DataScreen from './panels/DataScreen'
 import VKDataService, { IVKDataService } from './services/VKDataService'
+import AFState from './services/AFState'
 
 interface IState{
   activePanel: string,
@@ -27,10 +28,12 @@ interface IState{
 const PAGE_SIZE = 10
 const COUNTERS_ZERO = { requestsSent:0, requestsQueued:0, friendsCount:0, friendsDataReceived:0, attemptsCountExceeded:0, friendsErrorResponse:0, friendsProfileClosed:0, groupsCount:0 }
 class App extends React.Component<{}, IState>{
+
+  allFriendsState = new AFState((st: any) => this.setState(st), (func: any) => {this.setState(func)})
   constructor(props: any){
     super(props)
 
-    let vkDataService = new VKDataService()
+    let vkDataService = new VKDataService(this.allFriendsState)
     this.state = {
       activePanel: 'startScreen',
       vkDataService: vkDataService,
@@ -44,12 +47,8 @@ class App extends React.Component<{}, IState>{
       timers: [],
       error: null
     }
-    this.incCounter = this.incCounter.bind(this)
     this.createChlidProps = this.createChlidProps.bind(this)
     this.loadData = this.loadData.bind(this)
-    this.incCounter = this.incCounter.bind(this)
-    this.setCounter = this.setCounter.bind(this)
-    this.changeCounter = this.changeCounter.bind(this)
     this.onError = this.onError.bind(this)
     this.incTopCount = this.incTopCount.bind(this)
     this.cleanState = this.cleanState.bind(this)
@@ -77,15 +76,7 @@ class App extends React.Component<{}, IState>{
       token: token,
       timers: this.state.timers,
       topDataArr: this.state.topDataArr,
-      groupsData: this.state.groupsData,
-      setTopDataHasMore: (hasMore: boolean) => {
-        this.setState({
-          topDataHasMore: hasMore
-        })
-      },
-      incCounter: this.incCounter,
-      setCounter: this.setCounter,
-      onError: this.onError
+      groupsData: this.state.groupsData
     }
   }
 
@@ -105,27 +96,6 @@ class App extends React.Component<{}, IState>{
     catch(err){
       this.onError(err)
     }
-  }
-
-  changeCounter (counterName: any, addVal = 1, valueFunc: any) {
-    this.setState((state: any) => {
-      const counters = Object.assign({}, state.counters)
-      counters[counterName] = valueFunc((counters[counterName] ?? 0), addVal)
-      // log(`rS ${counters.requestsSent}, rQ ${counters.requestsQueued}, fC ${counters.friendsCount}, fDR ${counters.friendsDataReceived}, aCE ${counters.attemptsCountExceeded}, fER ${counters.friendsErrorResponse}`)
-      return {
-        counters: counters
-      }
-    })
-  }
-
-  incCounter (counterName: any, addVal = 1) {
-    this.changeCounter(counterName, addVal, 
-      (currentValue: any, passedValue: any) => currentValue + passedValue)
-  }
-
-  setCounter (counterName: any, newVal: number) {
-    this.changeCounter(counterName, newVal,
-      (_: any, passedValue: any) => passedValue)
   }
 
   onError (errorResponse: any) {
@@ -163,7 +133,7 @@ class App extends React.Component<{}, IState>{
     this.setState({
       fetchedUser: user,
       popOut: <ScreenSpinner/>,
-      vkDataService: new VKDataService()
+      vkDataService: new VKDataService(this.allFriendsState)
     })
     this.loadData(this.createChlidProps(user, this.state.token))
   }
@@ -186,7 +156,6 @@ class App extends React.Component<{}, IState>{
           setParentState = {(s: any) => {
             this.setState(s)
           }}
-          incCounter = {this.incCounter}
           setPopOut = {(popOut: any) => {
             this.setState({
               popOut: popOut
