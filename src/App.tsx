@@ -95,7 +95,7 @@ class App extends React.Component<{}, IState>{
   onError(errorResponse: any) {
     log(errorResponse)
     this.setState({
-      error: (errorResponse?.error_data?.error_reason?.error_msg ?? "Произошла ошибка: " + JSON.stringify(errorResponse)),
+      error: (errorResponse?.error_data?.error_reason?.error_msg ?? "Ошибка: " + JSON.stringify(errorResponse)),
       popOut: null
     })
   }
