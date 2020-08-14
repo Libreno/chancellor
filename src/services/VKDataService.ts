@@ -124,12 +124,8 @@ class VKDataService implements IVKDataService{
   
   timerCounter = 0
   scheduledTime_ms = 0
-  callAPI_(props: any, method: string, requestId: string, params: any, new_scheduledTime_ms: any = null) {
-    let request = {
-      method: method, 
-      request_id: requestId, 
-      params: params
-    }
+  callAPI_(props: any, method: string, request_id: string, params: any, new_scheduledTime_ms: any = null) {
+    let request = { method, request_id, params }
     params["v"] = API_VERSION
     params["access_token"] = props.token
     const cancelToken = { id: this.timerCounter++, cancel: () => {} }
@@ -178,10 +174,10 @@ class VKDataService implements IVKDataService{
     return `{"method":"${method}", "profileUserId":"${fetchedUserid}", "user_id":"${user_id? user_id : fetchedUserid}", "extended":"${extended}", "offset":"${offset}"}`
   }
   
-  getUser(token: string, timers: any, userName: string) {
+  getUser(token: string, timers: any, user_ids: string) {
     return this.callAPI_({token: token, timers: timers},
       "users.get", this.getRequestId_(null, USERS_GET_METHOD_NAME), 
-      { user_ids: userName, fields: "photo_200, city, nickname"}, 0)
+      { user_ids, fields: "photo_200, city, nickname"}, 0)
   }
 
   topDataKeys = new Set()
